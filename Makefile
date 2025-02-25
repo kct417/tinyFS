@@ -5,6 +5,10 @@ CFLAGS = -Wall -g -I$(IDIR)
 PROG = tinyFSDemo
 OBJS = tinyFSDemo.o libTinyFS.o libDisk.o
 
+TEST_PROG = diskTest
+TEST_SRC = ./test/diskTest.c
+TEST_OBJ = ./test/diskTest.o
+
 all: $(PROG)
 
 $(PROG): $(OBJS)
@@ -19,5 +23,12 @@ libTinyFS.o: ./src/libTinyFS.c libDisk.o
 libDisk.o: ./src/libDisk.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+$(TEST_PROG): $(TEST_OBJ) libDisk.o
+	$(CC) $(CFLAGS) -o $(TEST_PROG) $(TEST_OBJ) libDisk.o
+
+$(TEST_OBJ): $(TEST_SRC)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 clean:
-	rm -f $(PROG) $(OBJS)
+	rm -f $(PROG) $(OBJS) $(TEST_PROG) $(TEST_OBJ) libDisk.o
+	rm -f *.dsk
