@@ -9,7 +9,11 @@ int openDisk(char *filename, int nBytes) {
     if (fd < 0) return -1;
 
     if (nBytes > 0) {
-        ftruncate(fd, (nBytes / BLOCKSIZE) * BLOCKSIZE);  // ensure correct size - int division so no remainder
+        if (ftruncate(fd, (nBytes / BLOCKSIZE) * BLOCKSIZE) < 0)    // ensure correct size - int division so no remainder
+        {
+            close(fd);
+            return -1;
+        }
     }
 
     return fd;
