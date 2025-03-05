@@ -10,7 +10,7 @@
 
 #define BLOCKSIZE 256  // Block size in bytes
 
-// Declarations for functions and types in libDisk.h
+
 int openDisk(char *filename, int nBytes);
 int readBlock(int disk, int blockNum, void *block);
 int writeBlock(int disk, int blockNum, void *block);

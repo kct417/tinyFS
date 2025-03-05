@@ -8,8 +8,16 @@
 
 #define MAGIC_NUMBER 0x44
 #define BLOCKSIZE 256  // Block size in bytes
+#define NUM_BLOCKS 40
 #define DEFAULT_DISK_SIZE 10240 // Default disk size in bytes
 #define DEFAULT_DISK_NAME "tinyFSDisk"
+
+// block types
+#define SUPERBLOCK 1
+#define INODE 2
+#define FILE_EXTENT 3
+#define FREE 4
+
 typedef int fileDescriptor;
 
 typedef struct
@@ -48,7 +56,7 @@ typedef struct
 
 int tfs_mkfs(char *filename, int nBytes);
 int tfs_mount(char *diskname);
-int tfs_umount(void);
+int tfs_unmount(void);
 fileDescriptor tfs_openFile(char *name);
 int tfs_closeFile(fileDescriptor FD);
 int tfs_writeFile(fileDescriptor FD, char *buffer, int size);
