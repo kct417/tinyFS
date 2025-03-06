@@ -1,13 +1,21 @@
 #include "libDisk.h"
 #include "libTinyFS.h"
+#include "tinyFS_errno.h"
 
-int mount = 0;  // flag to know if diskname has been mounted or not yet
+typedef enum {
+    UNMOUNTED,
+    MOUNTED
+} MountStatus;
+
+MountStatus mount = UNMOUNTED;  // flag to know if diskname has been mounted or not yet
 
 // initialize a TinyFS file system
 int tfs_mkfs(char *filename, int nBytes)
 {
+    if (nBytes < BLOCKSIZE) {return TFS_INVALID_ARG;}
+
     int disk = openDisk(filename, nBytes);
-    if (disk < 0) return -1;
+    if (disk < 0) return TFS_DISK_ERROR;
 
     // set up superblock as first block at idx 0
     Superblock sb;
@@ -29,7 +37,7 @@ int tfs_mount(char* diskname)
     if (mount) {tfs_unmount();}
 
     int disk = openDisk(diskname, 0);
-    if (disk < 0) {return -1;}
+    if (disk < 0) return TFS_DISK_ERROR;
 
     // put superblock into sb
     Superblock sb;
@@ -38,18 +46,32 @@ int tfs_mount(char* diskname)
     if (sb.magicNumber != MAGIC_NUMBER)
     {
         close(disk);
-        return -1;
+        return TFS_CORRUPTED_FS;
     }
     
-    mount = 1;
+    mount = MOUNTED;
     return disk;
 }
 
 int tfs_unmount(void)
 {
-    // unmounting things
+    if (mount == UNMOUNTED) {return TFS_NOT_MOUNTED;}
 
-    mount = 0;
+    mount = UNMOUNTED;
     
     return 0;
+}
+
+fileDescriptor tfs_openFile(char *name)
+{
+    if (strlen(name) > 8) {return TFS_INVALID_ARG;} // file name too long
+    
+    if (mount == UNMOUNTED) {return TFS_NOT_MOUNTED;}
+
+    for (int i = 0; i < MAX_FILES; i++)
+    {
+
+    }
+
+    // return fd;
 }

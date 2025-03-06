@@ -8,7 +8,8 @@
 
 #define MAGIC_NUMBER 0x44
 #define BLOCKSIZE 256  // Block size in bytes
-#define NUM_BLOCKS 40
+#define NUM_BLOCKS 40   // Number of blocks in disk
+#define MAX_FILES 39    // Maximum number of files not including superblock
 #define DEFAULT_DISK_SIZE 10240 // Default disk size in bytes
 #define DEFAULT_DISK_NAME "tinyFSDisk"
 
