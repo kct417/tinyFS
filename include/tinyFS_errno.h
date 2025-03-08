@@ -15,5 +15,9 @@
 #define TFS_OUT_OF_BOUNDS -9  // Out of bounds
 #define TFS_NO_SPACE -10      // No space left on file system
 #define TFS_CORRUPTED_FS -11  // Corrupted file system
+#define TFS_MAX_FILES_OPEN -12 // Maximum number of files open
+#define TFS_NO_FREE_INODES -13 // No free inodes
+#define TFS_NO_FREE_FDBLOCKS -14 // No free file descriptor blocks
+#define TFS_INVALID_FD -15
 
 #endif // TINYFS_ERRNO_H

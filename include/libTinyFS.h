@@ -6,10 +6,10 @@
 #include <string.h>
 // #include "libDisk.h"
 
-#define MAGIC_NUMBER 0x44
-#define BLOCKSIZE 256  // Block size in bytes
-#define NUM_BLOCKS 40   // Number of blocks in disk
-#define MAX_FILES 39    // Maximum number of files not including superblock
+#define MAGIC_NUMBER 0x44       // 0x44 == 'D'
+#define BLOCKSIZE 256           // Block size in bytes
+#define NUM_BLOCKS 40           // Number of blocks in disk
+#define MAX_FILES 32            // Maximum number of files not including superblock
 #define DEFAULT_DISK_SIZE 10240 // Default disk size in bytes
 #define DEFAULT_DISK_NAME "tinyFSDisk"
 
@@ -24,17 +24,18 @@ typedef int fileDescriptor;
 typedef struct
 {
     char blockType;
-    char magicNumber;
-    int freeBlockPointer;
-    int rootInodeBlock;
+    char magic;
+    int freeBitmap;
+    int inodeBitmap;
     int totalBlocks;
-    int freeBlocksCount;
+    int freeBlocks;
 } Superblock;
 
 typedef struct
 {
     char blockType;
-    char fileName[8];    // supports 8 characters no more
+    char magic;
+    char fileName[8]; // supports 8 characters no more
     int nextInode;
     int fileSize;
     int dataBlockPointers[30];
@@ -44,7 +45,8 @@ typedef struct
 {
     char blockType;
     char magic;
-    char data[BLOCKSIZE - 4];
+    int next;                 // update from char to int
+    char data[BLOCKSIZE - 8]; // adjust size based on new struct layout
 } FileExtent;
 
 typedef struct
@@ -54,6 +56,13 @@ typedef struct
     int next;
 } FreeBlock;
 
+typedef struct
+{
+    int inodeBlock;
+    int offset;
+    int mode;
+    int isOpen;
+} FD;
 
 int tfs_mkfs(char *filename, int nBytes);
 int tfs_mount(char *diskname);

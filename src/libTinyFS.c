@@ -9,6 +9,9 @@ typedef enum {
 
 MountStatus mount = UNMOUNTED;  // flag to know if diskname has been mounted or not yet
 
+int disk;  // file descriptor for disk
+FD fdTable[MAX_FILES]; // file descriptor table
+
 // initialize a TinyFS file system
 int tfs_mkfs(char *filename, int nBytes)
 {
@@ -43,7 +46,7 @@ int tfs_mount(char* diskname)
     Superblock sb;
     readBlock(disk, 0, &sb);
 
-    if (sb.magicNumber != MAGIC_NUMBER)
+    if (sb.magic != MAGIC_NUMBER)
     {
         close(disk);
         return TFS_CORRUPTED_FS;
@@ -64,14 +67,39 @@ int tfs_unmount(void)
 
 fileDescriptor tfs_openFile(char *name)
 {
-    if (strlen(name) > 8) {return TFS_INVALID_ARG;} // file name too long
+    if (strlen(name) > 8) {return TFS_INVALID_ARG;}     // file name too long
     
-    if (mount == UNMOUNTED) {return TFS_NOT_MOUNTED;}
+    if (mount == UNMOUNTED) {return TFS_NOT_MOUNTED;}   // disk not mounted
 
+    // find file in the inode table
     for (int i = 0; i < MAX_FILES; i++)
     {
+        Inode inode;
+        readBlock(disk, i + 1, &inode);   // read inode at idx i + 1, skip superblock
+
+        if (inode.blockType == INODE && strcmp(inode.fileName, name) == 0)
+        {
+            // check magic number
+            if (inode.magic != MAGIC_NUMBER) {return TFS_CORRUPTED_FS;}
+
+            // find free file descriptor slot
+            for (int j = 0; j < MAX_FILES; j++)
+            {
+                if (fdTable[j].isOpen == 0)
+                {
+                    fdTable[j].inodeBlock = i + 1;   // set inode block
+                    fdTable[j].offset = 0;           // set offset to 0
+                    fdTable[j].mode = READ_ONLY;     // set mode to read only
+                    fdTable[j].isOpen = 1;           // mark as open
+
+                    return j;   // return fd idx
+                }
+            }
+
+            return TFS_NO_FREE_FDBLOCKS;   // return error if all file descriptors are in use
+        }
 
     }
 
-    // return fd;
+    return TFS_FILE_NOT_FOUND; // return error if file is not found
 }
