@@ -12,8 +12,10 @@ int openDisk(char *filename, int nBytes) {
     if (nBytes == 0) {
         disk_file = fopen(filename,"rb+");
         if (disk_file == NULL) {
+            printf("DEBUG: openDisk failed to open existing file %s\n", filename);
             return -1;
         }
+        printf("DEBUG: openDisk opened existing file%s\n",filename);
         // assime file size is mutliple of BLOCKSIZE
         // move file pointer to end of file
         fseek(disk_file, 0, SEEK_END);
