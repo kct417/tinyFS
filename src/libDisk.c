@@ -1,4 +1,4 @@
-#include "disk.h"
+#include "libDisk.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,11 +12,9 @@ int openDisk(char *filename, int nBytes) {
     if (nBytes == 0) {
         disk_file = fopen(filename,"rb+");
         if (disk_file == NULL) {
-            printf("DEBUG: openDisk failed to open existing file %s\n", filename);
             return -1;
         }
-        printf("DEBUG: openDisk opened existing file%s\n",filename);
-        // assime file size is mutliple of BLOCKSIZE
+        // assume file size is mutliple of BLOCKSIZE
         // move file pointer to end of file
         fseek(disk_file, 0, SEEK_END);
         // return file pointer position (represents disk size in bytes)
@@ -91,19 +89,26 @@ int readBlock(int disk, int bNum, void *block) {
 }
 
 int writeBlock(int disk, int bNum, void *block) {
-    // if disk is not open, return -1
-    if (!disk_file) return -1;
-    // if bNum is out of bounds, return -1
-    long offset = bNum * BLOCKSIZE;
-    if (offset + BLOCKSIZE > disk_size) return -1;
-    // move file pointer to bNum * BLOCKSIZE
-    if (fseek(disk_file, offset, SEEK_SET) != 0) return -1;
-    // write BLOCKSIZE bytes from buffer to file
+    if (!disk_file) {
+        printf("[ERROR] Disk is not open!\n");
+        return -1;
+    }
+    long offset = (long) bNum * BLOCKSIZE;
+    if (bNum < 0 || offset >= disk_size) {
+        printf("[ERROR] Invalid block number: %d (Out of bounds)\n", bNum);
+        return -1;
+    }
+    if (fseek(disk_file, offset, SEEK_SET) != 0) {
+        printf("[ERROR] fseek() failed for block %d\n", bNum);
+        return -1;
+    }
     size_t bytesWritten = fwrite(block, 1, BLOCKSIZE, disk_file);
-    // flush file to disk, forces buffered data to be written to disk
-    fflush(disk_file);
-    // if bytesWritten is not BLOCKSIZE, return -1
-    if (bytesWritten != BLOCKSIZE) return -1;
-    
+    fflush(disk_file); // Ensure data is written to disk
+
+    if (bytesWritten != BLOCKSIZE) {
+        printf("[ERROR] fwrite() failed: expected %d bytes, got %ld\n", BLOCKSIZE, bytesWritten);
+        return -1;
+    }
+
     return 0;
 }

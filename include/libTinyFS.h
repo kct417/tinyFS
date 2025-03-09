@@ -1,32 +1,29 @@
 #ifndef TINYFS_H
 #define TINYFS_H
 
-#include "disk.h"
-// #include "tinyFS.c"
+#include "libDisk.h"
 
 #define BLOCKSIZE 256
 #define DEFAULT_DISK_SIZE 10240
 #define DEFAULT_DISK_NAME "tinyFSDisk"
 #define MAX_INODES 5
 #define MAX_FILES 40
+#define MAX_FILENAME_LEN 8
 #define DATA_HEADER_SIZE 6
 #define EFFECTIVE_DATA (BLOCKSIZE - DATA_HEADER_SIZE)
 
-// Example on-disk superblock structure (fits in 256 bytes)
 typedef struct {
-    unsigned char type;      // Should be 1 for superblock
-    unsigned char magic;     // Should be 0x44
-    int root_inode;          // Block number for the root inode (or first inode)
-    int free_list;           // Pointer to the free block list (or use a bit vector)
-    char padding[BLOCKSIZE - 10];  // Padding to fill 256 bytes
+    unsigned char type; // 1 for superblock
+    unsigned char magic; 
+    int free_list; // pointer to free block
+    char padding[BLOCKSIZE - 6]; 
 } superblock_t;
 
-// Example on-disk inode structure (also 256 bytes)
 typedef struct {
-    unsigned char type;      // 2 for inode
-    char filename[9];        // Up to 8 characters + null terminator
-    int size;                // File size in bytes
-    int first_block;         // Block number of first file extent
+    unsigned char type; // 2 for inode
+    char filename[9]; 
+    int size; 
+    int first_block; // block number of first file ext
     char padding[BLOCKSIZE - (1 + 9 + 4 + 4)];  // Padding to fill 256 bytes
 } inode_t;
 
@@ -36,10 +33,10 @@ typedef struct {
     int block_number;  // block number where the inode is stored
 } persistent_inode_entry_t;
 
-// In-memory file descriptor entry
+// in-memory file descriptor entry
 typedef struct {
     int used;
-    int inode_index;       // Index into the inode_directory
+    int inode_index;       // index into the inode_directory
     int file_pointer;      // Current read/write offset
 } file_entry_t;
 
@@ -47,12 +44,8 @@ typedef struct {
 static file_entry_t fd_table[MAX_FILES];
 static int disk_mounted = 0;
 static char mounted_disk[256] = {0};
-// static file_entry_t fd_table[MAX_FILES];
 static persistent_inode_entry_t inode_directory[MAX_INODES];
 static int next_free_data_block = MAX_INODES + 1;
-
-
-
 
 // Global variable for simple free block allocation.
 // We assume blocks 0-9 are reserved (e.g. block 0 for the superblock and possibly other blocks for future inode tables, etc
