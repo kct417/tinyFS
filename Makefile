@@ -1,34 +1,74 @@
+# $@: target
+# $^: all prerequisites
+# $<: first prerequisite
+
+# File Architecture
+SDIR = ./src
 IDIR = ./include
+LDIR = ./lib
+ODIR = ./obj
+TDIR = ./test_src
 
+# Compiler
 CC = gcc
-CFLAGS = -Wall -g -I$(IDIR)
+CFLAGS = -Wall -std=c99 -g -I$(IDIR)
+
+# Programs
 PROG = tinyFSDemo
-OBJS = tinyFSDemo.o libTinyFS.o libDisk.o
 
-TEST_PROG = diskTest
-TEST_SRC = ./test/diskTest.c
-TEST_OBJ = ./test/diskTest.o
+# Libraries
+LIBS = $(LDIR)/libTinyFS.a $(LDIR)/libDisk.a
 
-all: $(PROG)
+# Test Programs
+TESTS = diskTest tfsTest
 
-$(PROG): $(OBJS)
-	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
+# Default
+all: $(PROG) $(TESTS)
 
-tinyFSDemo.o: ./src/tinyFSDemo.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+# Make
+libs: $(LIBS)
+tests: $(TESTS)
 
-libTinyFS.o: ./src/libTinyFS.c libDisk.o
-	$(CC) $(CFLAGS) -c -o $@ $<
+# Program Object Files
+$(ODIR)/tinyFSDemo.o: $(SDIR)/tinyFSDemo.c
+	$(CC) $(CFLAGS) -c -o $@ $^
 
-libDisk.o: ./src/libDisk.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+$(ODIR)/libTinyFS.o: $(SDIR)/libTinyFS.c $(ODIR)/libDisk.o
+	$(CC) $(CFLAGS) -c -o $@ $^
 
-$(TEST_PROG): $(TEST_OBJ) libDisk.o
-	$(CC) $(CFLAGS) -o $(TEST_PROG) $(TEST_OBJ) libDisk.o
+$(ODIR)/libDisk.o: $(SDIR)/libDisk.c
+	$(CC) $(CFLAGS) -c -o $@ $^
 
-$(TEST_OBJ): $(TEST_SRC)
-	$(CC) $(CFLAGS) -c -o $@ $<
+# Libraries
+$(LDIR)/libTinyFS.a: $(ODIR)/libDisk.o $(ODIR)/libTinyFS.o
+	ar r $@ $^
+
+$(LDIR)/libDisk.a: $(ODIR)/libDisk.o
+	ar r $@ $^
+
+# Program
+tinyFSDemo: $(ODIR)/tinyFSDemo.o $(LDIR)/libTinyFS.a
+	$(CC) $(CFLAGS) -o $@ $< -Llib -lTinyFS
+
+# Test Object Files
+$(ODIR)/diskTest.o: $(TDIR)/diskTest.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+$(ODIR)/tfsTest.o: $(TDIR)/tfsTest.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+# Test Programs
+diskTest: $(ODIR)/diskTest.o $(LDIR)/libDisk.a
+	$(CC) $(CFLAGS) -o diskTest $< -L$(LDIR) -lDisk
+
+tfsTest: $(ODIR)/tfsTest.o $(LDIR)/libTinyFS.a
+	$(CC) $(CFLAGS) -o tfsTest $< -L$(LDIR) -lTinyFS
 
 clean:
-	rm -f $(PROG) $(OBJS) $(TEST_PROG) $(TEST_OBJ) libDisk.o
+	rm -f $(ODIR)/*.o $(LDIR)/*.a *.dsk afile bfile
+
+cleanall:
+	rm -f $(PROG) $(TESTS) $(ODIR)/*.o $(LDIR)/*.a *.dsk afile bfile
+
+cleandisk:
 	rm -f *.dsk
