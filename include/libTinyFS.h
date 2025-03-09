@@ -13,6 +13,9 @@
 #define DEFAULT_DISK_SIZE 10240 // Default disk size in bytes
 #define DEFAULT_DISK_NAME "tinyFSDisk"
 
+#define INODE_TABLE_START_BLK 3
+#define INODE_TABLE_BLKS 5
+
 // block types
 #define SUPERBLOCK 1
 #define INODE 2
@@ -60,7 +63,6 @@ typedef struct
 {
     int inodeBlock;
     int offset;
-    int mode;
     int isOpen;
 } FD;
 

@@ -72,10 +72,16 @@ fileDescriptor tfs_openFile(char *name)
     if (mount == UNMOUNTED) {return TFS_NOT_MOUNTED;}   // disk not mounted
 
     // find file in the inode table
-    for (int i = 0; i < MAX_FILES; i++)
+    for (int i = INODE_TABLE_START_BLK; i < INODE_TABLE_BLKS + INODE_TABLE_START_BLK; i++) // i + 3 initially, skip superblock and bitmaps
     {
+
+        // TODO: this implementation assumes 1 inode per block, I think we want more than 1
+        // inode per block and this should be fixed to reflect that as a struct 'block of inodes'
+        // or something similar that parses inodes from the block
+        err;
+
         Inode inode;
-        readBlock(disk, i + 1, &inode);   // read inode at idx i + 1, skip superblock
+        readBlock(disk, i, &inode);   // read inode at idx i
 
         if (inode.blockType == INODE && strcmp(inode.fileName, name) == 0)
         {
@@ -87,12 +93,11 @@ fileDescriptor tfs_openFile(char *name)
             {
                 if (fdTable[j].isOpen == 0)
                 {
-                    fdTable[j].inodeBlock = i + 1;   // set inode block
+                    fdTable[j].inodeBlock = i;   // set inode block
                     fdTable[j].offset = 0;           // set offset to 0
-                    fdTable[j].mode = READ_ONLY;     // set mode to read only
                     fdTable[j].isOpen = 1;           // mark as open
 
-                    return j;   // return fd idx
+                    return (fileDescriptor)j;   // return fd idx
                 }
             }
 
