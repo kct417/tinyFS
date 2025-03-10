@@ -13,6 +13,14 @@
 #define DSK_ERR_SEEK -8             // Seek error
 #define DSK_ERR_END_OF_FILE -9      // End of file
 
-static int dsk_errno = DSK_SUCCESS;
+extern int dsk_errno;
+
+static inline int *get_dsk_errno()
+{
+    static int _dsk_errno = DSK_SUCCESS;
+    return &_dsk_errno;
+}
+
+#define dsk_errno (*get_dsk_errno())
 
 #endif

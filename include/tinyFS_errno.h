@@ -19,6 +19,14 @@
 #define TFS_ERR_FILE_LIMIT -14       // Too many open files in system
 #define TFS_ERR_NO_SPACE -15         // No space left on device
 
-static int tfs_errno = TFS_SUCCESS;
+extern int tfs_errno;
+
+static inline int *get_tfs_errno()
+{
+    static int _tfs_errno = TFS_SUCCESS;
+    return &_tfs_errno;
+}
+
+#define tfs_errno (*get_tfs_errno())
 
 #endif
