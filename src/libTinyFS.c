@@ -4,6 +4,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+void debug_inode_table() {
+    printf("=== INODE TABLE ===\n");
+    for (int i = 0; i < MAX_INODES; i++) {
+        if (inode_directory[i].used) {
+            printf("[INODE %d] Name: '%s' | Parent: %d | First Block: %d | Next Sibling: %d | Is Dir: %d\n",
+                   i, inode_directory[i].inode.filename, inode_directory[i].inode.par_inode,
+                   inode_directory[i].inode.first_block, inode_directory[i].inode.next_sibling,
+                   inode_directory[i].inode.is_dir);
+        }
+    }
+    printf("====================\n");
+}
+
 // allocates a new data block for file data.
 static int allocate_data_block() {
     int total_blocks = DEFAULT_DISK_SIZE / BLOCKSIZE;
@@ -35,15 +48,46 @@ static void load_inode_directory() {
     }
 }
 
-// finds the inode with matching filename in the persistent directory
-// returns the index in inode_directory if found, or -1 if not found
-static int find_inode_by_name(const char *name) {
-    for (int i = 0; i < MAX_INODES; i++) {
-        if (inode_directory[i].used && strcmp(inode_directory[i].inode.filename, name) == 0)
-            return i;
+int find_inode_by_name(const char *path) {
+    if (strcmp(path, "/") == 0) return 0; // Root inode is always at index 0
+
+    char temp[256], *token;
+    strncpy(temp, path, 255);
+    temp[255] = '\0';
+
+    int cur_inode = 0;  // Start from root directory
+
+    token = strtok(temp, "/");
+    while (token != NULL) {
+        int found = -1;
+        int cur_idx = inode_directory[cur_inode].inode.first_block; // First file/dir in current directory
+
+        while (cur_idx != -1) {
+            printf("[DEBUG] find_inode_by_name: Checking inode %d (%s) under parent '%s'\n",
+                   cur_idx, inode_directory[cur_idx].inode.filename, inode_directory[cur_inode].inode.filename);
+
+            if (strcmp(inode_directory[cur_idx].inode.filename, token) == 0) {
+                found = cur_idx;
+                break;
+            }
+
+            cur_idx = inode_directory[cur_idx].inode.next_sibling;  // **Check siblings**
+        }
+
+        if (found == -1) {
+            printf("[DEBUG] find_inode_by_name: '%s' NOT found under '%s'\n",
+                   token, inode_directory[cur_inode].inode.filename);
+            return -1;
+        }
+
+        cur_inode = found;  // Move to next directory level
+        token = strtok(NULL, "/");
     }
-    return -1;
+
+    printf("[DEBUG] find_inode_by_name: Resolved '%s' to inode %d\n", path, cur_inode);
+    return cur_inode;
 }
+
 
 // allocates a free inode slot in inode_directory
 // returns the index allocated, or -1 if none free
@@ -53,6 +97,27 @@ static int allocate_inode_slot() {
             return i;
     }
     return -1;
+}
+
+int split_path(const char *path, char *par_path, char *basename) {
+    if (!path || !par_path || !basename) return -1;
+    if (strcmp(path, "/") == 0) return -1;  // Root has no parent
+
+    char temp[256];
+    strncpy(temp, path, 255);
+    temp[255] = '\0';
+
+    char *last_slash = strrchr(temp, '/');
+    if (!last_slash || last_slash == temp) {
+        // If there's no valid parent, treat it as direct root child
+        strcpy(par_path, "/");
+        strcpy(basename, last_slash ? last_slash + 1 : temp);
+    } else {
+        *last_slash = '\0';
+        strcpy(par_path, temp);
+        strcpy(basename, last_slash + 1);
+    }
+    return 0;
 }
 
 /* tfs_mkfs: format a new tinyFS file system 
@@ -67,6 +132,7 @@ int tfs_mkfs(char *filename, int nBytes) {
     memset(&sb, 0, sizeof(superblock_t));
     sb.type = 1;
     sb.magic = 0x44;
+    sb.root_inode = 1;
     sb.free_list = MAX_INODES + 1; 
     if (writeBlock(0, 0, &sb) < 0) return TFS_ERR_WRITE_FAIL;
 
@@ -78,6 +144,22 @@ int tfs_mkfs(char *filename, int nBytes) {
             return TFS_ERR_WRITE_FAIL;
         inode_directory[i].used = 0;
     }
+
+    // initialize root dir block 1
+    inode_t root;
+    memset(&root, 0, sizeof(inode_t));
+    root.type = 2;
+    root.is_dir = 1;
+    strcpy(root.filename, "/");
+    root.size = 0;
+    root.first_block = -1;
+    root.par_inode = -1;
+    root.next_sibling = -1;
+    inode_directory[0].used = 1;
+    inode_directory[0].inode = root;
+    inode_directory[0].block_number = 1;
+
+    if (writeBlock(0, 1, &root) < 0) return TFS_ERR_WRITE_FAIL;
 
     // reset file descriptor table
     memset(fd_table, 0, sizeof(fd_table));
@@ -137,34 +219,79 @@ int tfs_unmount(void) {
     memset(fd_table, 0, sizeof(fd_table));
     return TFS_SUCCESS;
 }
-
-/* tfs_openFile: open or create a file. */
 fileDescriptor tfs_openFile(char *name) {
     if (!disk_mounted) return TFS_ERR_NO_DISK;
 
-    int inode_index = find_inode_by_name(name);
+    // Parse directory path and extract parent path and file name
+    char par_path[256], dir_basename[MAX_FILENAME_LEN + 1];
+    if (split_path(name, par_path, dir_basename) < 0) return TFS_ERR_INVALID_PATH;
+    printf("[DEBUG] tfs_openFile: Parsed Path -> Parent: '%s', Basename: '%s'\n", par_path, dir_basename);
+
+    // Ensure parent directory exists
+    int par_inode_idx = find_inode_by_name(par_path);
+    if (par_inode_idx < 0 || !inode_directory[par_inode_idx].inode.is_dir) {
+        printf("[DEBUG] tfs_openFile: Parent directory '%s' does not exist.\n", par_path);
+        return TFS_ERR_INVALID_PATH;
+    }
+
+    inode_t *par_inode = &inode_directory[par_inode_idx].inode;
+    printf("[DEBUG] tfs_openFile: Parent directory '%s' found at inode %d\n", par_path, par_inode_idx);
+
+    // **🔍 Look for the file inside the parent directory (check sibling list)**
+    int inode_index = -1;
+    int cur_idx = par_inode->first_block;  // Start searching from the first child
+
+    while (cur_idx != -1) {
+        printf("[DEBUG] tfs_openFile: Checking inode %d -> '%s'\n",
+               cur_idx, inode_directory[cur_idx].inode.filename);
+
+        if (strcmp(inode_directory[cur_idx].inode.filename, dir_basename) == 0) {
+            inode_index = cur_idx;
+            printf("[DEBUG] tfs_openFile: Found existing file '%s' at Inode %d\n", dir_basename, inode_index);
+            break;
+        }
+        cur_idx = inode_directory[cur_idx].inode.next_sibling;
+    }
+
     if (inode_index < 0) {
-        // file doesn't exist, allocate a new inode
+        // 🔹 **File does not exist, allocate a new inode**
+        printf("[DEBUG] tfs_openFile: File '%s' does not exist. Allocating new inode...\n", dir_basename);
         inode_index = allocate_inode_slot();
-        if (inode_index < 0)
-            return TFS_ERR_NO_FREE_BLOCKS;
+        if (inode_index < 0) return TFS_ERR_NO_FREE_BLOCKS;
 
         inode_t new_inode;
         memset(&new_inode, 0, sizeof(inode_t));
         new_inode.type = 2;
-        strncpy(new_inode.filename, name, 8);
-        new_inode.filename[8] = '\0';
+        new_inode.is_dir = 0;
+        strncpy(new_inode.filename, dir_basename, MAX_FILENAME_LEN);
+        new_inode.filename[MAX_FILENAME_LEN] = '\0';
         new_inode.size = 0;
-        new_inode.first_block = -1; // no data yet
+        new_inode.par_inode = par_inode_idx;
+        new_inode.first_block = -1;
+        new_inode.next_sibling = -1;
 
-        // update inode dir
+        // ✅ **Insert into the correct directory's file list**
+        if (par_inode->first_block == -1) {
+            par_inode->first_block = inode_index; // First file in directory
+        } else {
+            // Traverse siblings to find the end of the list
+            int last_idx = par_inode->first_block;
+            while (inode_directory[last_idx].inode.next_sibling != -1) {
+                last_idx = inode_directory[last_idx].inode.next_sibling;
+            }
+            inode_directory[last_idx].inode.next_sibling = inode_index;
+        }
+
+        // ✅ **Save inode in memory and on disk**
         inode_directory[inode_index].used = 1;
         inode_directory[inode_index].inode = new_inode;
         inode_directory[inode_index].block_number = inode_index + 1;
-        if (write_inode_to_disk(inode_index) < 0)return TFS_ERR_WRITE_FAIL;
+        if (write_inode_to_disk(inode_index) < 0 || write_inode_to_disk(par_inode_idx) < 0) return TFS_ERR_WRITE_FAIL;
+
+        printf("[DEBUG] tfs_openFile: Successfully created file '%s' (Inode %d) under '%s'\n", dir_basename, inode_index, par_path);
     }
 
-    // create a new file descriptor entry
+    // ✅ **Assign a file descriptor**
     int fd = -1;
     for (int i = 0; i < MAX_FILES; i++) {
         if (!fd_table[i].used) {
@@ -172,11 +299,13 @@ fileDescriptor tfs_openFile(char *name) {
             break;
         }
     }
-
     if (fd < 0) return TFS_ERR_INVALID_FD;
+
     fd_table[fd].used = 1;
     fd_table[fd].inode_index = inode_index;
     fd_table[fd].file_pointer = 0;
+
+    printf("[DEBUG] tfs_openFile: Opened file '%s' (Inode %d) with FD %d\n", dir_basename, inode_index, fd);
     return fd;
 }
 
@@ -335,4 +464,139 @@ void tfs_readdir() {
         }
     }
     if (count == 0) printf("No files found\n");
+}
+
+
+int tfs_createDir(char *dirName) {
+    if (!disk_mounted) return TFS_ERR_NO_DISK;
+
+    // Extract parent directory and basename
+    char par_path[256], dir_basename[MAX_FILENAME_LEN];
+    if (split_path(dirName, par_path, dir_basename) < 0) return TFS_ERR_INVALID_PATH;
+
+    int par_inode_idx = find_inode_by_name(par_path);
+    if (par_inode_idx < 0 || !inode_directory[par_inode_idx].inode.is_dir) return TFS_ERR_INVALID_PATH;
+    
+    // Check if directory already exists
+    if (find_inode_by_name(dirName) >= 0) return TFS_ERR_INVALID_FILE;
+
+    // Allocate new inode for directory
+    int new_inode_idx = allocate_inode_slot();
+    if (new_inode_idx < 0) return TFS_ERR_NO_FREE_BLOCKS;
+
+    inode_t new_inode;
+    memset(&new_inode, 0, sizeof(inode_t));
+    new_inode.type = 2;
+    new_inode.is_dir = 1;
+    strncpy(new_inode.filename, dir_basename, MAX_FILENAME_LEN);
+    new_inode.filename[MAX_FILENAME_LEN] = '\0';
+    new_inode.size = 0;
+    new_inode.first_block = -1;
+    new_inode.par_inode = par_inode_idx;
+    new_inode.next_sibling = -1;
+
+    // Link new directory to parent
+    if (inode_directory[par_inode_idx].inode.first_block == -1) {
+        inode_directory[par_inode_idx].inode.first_block = new_inode_idx;
+    } else {
+        int cur = inode_directory[par_inode_idx].inode.first_block;
+        while (inode_directory[cur].inode.next_sibling != -1) {
+            cur = inode_directory[cur].inode.next_sibling;
+        }
+        inode_directory[cur].inode.next_sibling = new_inode_idx;
+    }
+
+    // Store in memory and on disk
+    inode_directory[new_inode_idx].used = 1;
+    inode_directory[new_inode_idx].inode = new_inode;
+    inode_directory[new_inode_idx].block_number = new_inode_idx + 1;
+    if (write_inode_to_disk(new_inode_idx) < 0 || write_inode_to_disk(par_inode_idx) < 0) return TFS_ERR_WRITE_FAIL;
+
+    //printf("[DEBUG] Successfully created directory '%s' under '%s' (Inode %d)\n",
+     //      dir_basename, par_path, new_inode_idx);
+
+    return TFS_SUCCESS;
+}
+
+/* tfs_removeDir: deletes empty dir */
+int tfs_removeDir(char *dirName) {
+    if (!disk_mounted) return TFS_ERR_NO_DISK;
+
+    // find dir inode
+    int dir_inode_idx = find_inode_by_name(dirName);
+    if (dir_inode_idx < 0) return TFS_ERR_INVALID_PATH;
+
+    inode_t *dir_inode = &inode_directory[dir_inode_idx].inode;
+    if (!dir_inode->is_dir) return TFS_ERR_INVALID_FILE;
+
+    // check if empty
+    int not_empty = 0;
+    for (int i=0; i<MAX_INODES; i++) {
+        if (inode_directory[i].used && inode_directory[i].inode.par_inode == dir_inode_idx) {
+            not_empty = 1;
+            break;
+        }
+    }
+    if (not_empty) return TFS_ERR_DIR;
+
+    // empty, unlink dir from par
+    int par_idx = dir_inode->par_inode;
+    if (par_idx >= 0) {
+        inode_t *par = &inode_directory[par_idx].inode;
+
+        // update linked list
+        if (par->first_block == dir_inode_idx) {
+            par->first_block = dir_inode->next_sibling;
+        } else {
+            int prev = par->first_block;
+            while (prev >= 0) {
+                inode_t *sibling = &inode_directory[prev].inode;
+                if (sibling->next_sibling == dir_inode_idx) {
+                    sibling->next_sibling = dir_inode->next_sibling;
+                    break;
+                }
+                if (sibling->next_sibling < 0) break; 
+                prev = sibling->next_sibling;
+            }
+
+        }
+        // write to disk
+        if (write_inode_to_disk(par_idx) < 0) return TFS_ERR_WRITE_FAIL;
+    }
+
+    // free dir inode
+    inode_directory[dir_inode_idx].used = 0;
+    memset(&inode_directory[dir_inode_idx].inode, 0, sizeof(inode_t));
+
+    if (write_inode_to_disk(dir_inode_idx) < 0) return TFS_ERR_WRITE_FAIL;
+
+    printf("Successfully removed empty directory: %s\n", dirName);
+    return TFS_SUCCESS;
+}
+
+int tfs_removeAll(char *dirName) {
+    if (!disk_mounted) return TFS_ERR_NO_DISK;
+
+    // find dir inode
+    int dir_inode_idx = find_inode_by_name(dirName);
+    if (dir_inode_idx < 0) return TFS_ERR_INVALID_PATH;
+
+    inode_t *dir_inode = &inode_directory[dir_inode_idx].inode;
+
+    if (!dir_inode->is_dir) return TFS_ERR_DIR;
+
+    // recursively delete all child inodes
+    for (int i = 0; i < MAX_INODES; i++) {
+        if (inode_directory[i].used && inode_directory[i].inode.par_inode == dir_inode_idx) {
+            if (inode_directory[i].inode.is_dir) {
+                if (tfs_removeAll(inode_directory[i].inode.filename) < 0) return TFS_ERR_REMOVE_FAIL;
+            } else {
+                // delete
+                int file_fd = tfs_openFile(inode_directory[i].inode.filename);
+                if (file_fd >= 0) tfs_deleteFile(file_fd);
+            }
+        }
+    }
+
+    return tfs_removeDir(dirName);
 }

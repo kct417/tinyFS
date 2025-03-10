@@ -2,11 +2,13 @@
 #define TINYFS_H
 
 #include "libDisk.h"
+#include <stdint.h>
+
 
 #define BLOCKSIZE 256
 #define DEFAULT_DISK_SIZE 10240
 #define DEFAULT_DISK_NAME "tinyFSDisk"
-#define MAX_INODES 5
+#define MAX_INODES 10
 #define MAX_FILES 40
 #define MAX_FILENAME_LEN 8
 #define DATA_HEADER_SIZE 6
@@ -15,16 +17,20 @@
 typedef struct {
     unsigned char type; // 1 for superblock
     unsigned char magic; 
+    int root_inode; // block number of root dir inode
     int free_list; // pointer to free block
     char padding[BLOCKSIZE - 6]; 
 } superblock_t;
 
 typedef struct {
     unsigned char type; // 2 for inode
+    uint8_t is_dir; // 0 = file, 1 = dir
     char filename[9]; 
     int size; 
     int first_block; // block number of first file ext
-    char padding[BLOCKSIZE - (1 + 9 + 4 + 4)];  // Padding to fill 256 bytes
+    int par_inode; // parent dir
+    int next_sibling; // next inode in the same dir - linked list
+    char padding[BLOCKSIZE - 21];  // Padding to fill 256 bytes
 } inode_t;
 
 typedef struct {
@@ -66,6 +72,9 @@ int tfs_seek(fileDescriptor fd, int offset);
 static int write_inode_to_disk(int index);
 static void load_inode_directory();
 static int find_inode_by_name(const char *name);
+int tfs_createDir(char *dirName);
+int tfs_removeDir(char *dirName);
+int tfs_removeAll(char *dirName);
 
 
 #endif

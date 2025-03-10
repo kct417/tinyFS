@@ -51,6 +51,18 @@ int main()
         }
     }
 
+    printf("\n[TEST] Creating directories...\n");
+    /* Create directories */
+    if (tfs_createDir("/home") == 0)
+        printf("[SUCCESS] Created '/home'\n");
+    else
+        printf("[ERROR] Failed to create '/home'\n");
+
+    if (tfs_createDir("/home/user") == 0)
+        printf("[SUCCESS] Created '/home/user'\n");
+    else
+        printf("[ERROR] Failed to create '/home/user'\n");
+
     afileContent = (char *)malloc(afileSize * sizeof(char));
     if (fillBufferWithPhrase(phrase1, afileContent, afileSize) < 0)
     {
@@ -66,108 +78,67 @@ int main()
     }
 
     /* print content of files for debugging */
-    printf("(a) File content: %s\n(b) File content: %s\nReady to store in TinyFS\n",
-           afileContent, bfileContent);
+    //printf("(a) File content: %s\n(b) File content: %s\nReady to store in TinyFS\n",
+    //       afileContent, bfileContent);
 
     /* read or write files to TinyFS */
 
-    aFD = tfs_openFile("afile");
+    /* Open and process '/home/user/afile' */
+    printf("\n[TEST] Opening '/home/user/afile'...\n");
+    aFD = tfs_openFile("/home/user/afile");
 
     if (aFD < 0)
-    {
-        perror("tfs_openFile failed on afile");
-    }
-
-    /* now, was there already a file named "afile" that had some content? If we can read from it, yes!
-     ** If we can't read from it, it presumably means the file was empty.
-     ** If the size is 0 (all new files are sized 0) then any "readByte()" should fail, so
-     ** it's a new file and empty */
-
-    if (tfs_readByte(aFD, &readBuffer) < 0)
-    {
-        
-        /* if readByte() fails, there was no afile, so we write to it */
-        if (tfs_writeFile(aFD, afileContent, afileSize) < 0)
-        {
-            perror("tfs_writeFile failed");
-        }
-        else
-            printf("Successfully written to afile\n");
-
-    }
+        perror("[ERROR] tfs_openFile failed on afile");
     else
     {
-        /* if yes, then just read and print the rest of afile that was already there */
-        printf("\n*** reading afile from TinyFS: \n%c", readBuffer); /* print the first byte already read */
-        /* now print the rest of it, byte by byte */
-        while (tfs_readByte(aFD, &readBuffer) >= 0) /* go until readByte fails */
-            printf("%c", readBuffer);
-        
-        /* test readdir */
-        printf("\nListing files before renaming:\n");
-        tfs_readdir();
-        /* test rename */
-
-        printf("\nRenaming 'afile' to 'cfile'...\n");
-        if (tfs_rename(aFD, "cfile") == 0)
+        if (tfs_readByte(aFD, &readBuffer) < 0)
         {
-            printf("File renamed successfully.\n");
+            /* If readByte fails, file is empty - write content */
+            printf("[INFO] '/home/user/afile' is empty. Writing new content...\n");
+            if (tfs_writeFile(aFD, afileContent, afileSize) == 0)
+                printf("[SUCCESS] Written to '/home/user/afile'\n");
+            else
+                printf("[ERROR] Failed to write '/home/user/afile'\n");
         }
         else
         {
-            printf("Failed to rename file.\n");
+            /* If file exists, print contents */
+            printf("\n[TEST] Reading from '/home/user/afile':\n");
+            printf("%c", readBuffer); // First byte already read
+            while (tfs_readByte(aFD, &readBuffer) >= 0)
+                printf("%c", readBuffer);
+            printf("\n");
         }
-        /* list files after renaming */
-        printf("\nListing files after renaming:\n");
-        tfs_readdir();
-
-        /* close renamed file */
-        if (tfs_closeFile(aFD) < 0)
-            perror("tfs_closeFile failed");
-
-        /* now try to delete the file. It should fail because aFD is no longer valid */
-        if (tfs_deleteFile(aFD) < 0)
-        {
-            // should fail, so now open renamed file to verify
-            fileDescriptor renamedFD = tfs_openFile("cfile");
-            if (renamedFD < 0) {
-                printf("Error: could not open renamed file");
-            } else {
-                printf("Successfully opened file. Now attempting to delete\n");
-                // then delete
-                if (tfs_deleteFile(renamedFD) < 0) perror("tfs_deleteFile failed");
-                else printf("Successfully deleted\n");
-            }
-            
-        }
-        
     }
 
-    /* now bfile tests */
-    bFD = tfs_openFile("bfile");
+    /* Open and process '/home/user/bfile' */
+    printf("\n[TEST] Opening '/home/user/bfile'...\n");
+    bFD = tfs_openFile("/home/user/bfile");
 
     if (bFD < 0)
-    {
-        perror("tfs_openFile failed on bfile");
-    }
-
-    if (tfs_readByte(bFD, &readBuffer) < 0)
-    {
-        if (tfs_writeFile(bFD, bfileContent, bfileSize) < 0)
-        {
-            perror("tfs_writeFile failed");
-        }
-        else
-            printf("Successfully written to bfile\n");
-    }
+        perror("[ERROR] tfs_openFile failed on bfile");
     else
     {
-        printf("\n*** reading bfile from TinyFS: \n%c", readBuffer);
-        while (tfs_readByte(bFD, &readBuffer) >= 0)
-            printf("%c", readBuffer);
-
-        tfs_deleteFile(bFD);
+        if (tfs_readByte(bFD, &readBuffer) < 0)
+        {
+            /* If readByte fails, file is empty - write content */
+            printf("[INFO] '/home/user/bfile' is empty. Writing new content...\n");
+            if (tfs_writeFile(bFD, bfileContent, bfileSize) == 0)
+                printf("[SUCCESS] Written to '/home/user/bfile'\n");
+            else
+                printf("[ERROR] Failed to write '/home/user/bfile'\n");
+        }
+        else
+        {
+            /* If file exists, print contents */
+            printf("\n[TEST] Reading from '/home/user/bfile':\n");
+            printf("%c", readBuffer); // First byte already read
+            while (tfs_readByte(bFD, &readBuffer) >= 0)
+                printf("%c", readBuffer);
+            printf("\n");
+        }
     }
+    debug_inode_table();
     
     /* Free both content buffers */
     free(bfileContent);

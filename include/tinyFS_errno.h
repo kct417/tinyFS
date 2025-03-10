@@ -7,3 +7,6 @@
 #define TFS_ERR_FILE_NOT_FOUND -6  // File not found
 #define TFS_ERR_INVALID_BLOCK -7
 #define TFS_ERR_INVALID_FILE -8
+#define TFS_ERR_INVALID_PATH -9
+#define TFS_ERR_DIR -10
+#define TFS_ERR_REMOVE_FAIL -11
