@@ -1,5 +1,5 @@
-#ifndef _LIBDISK_H
-#define _LIBDISK_H
+#ifndef _DISK_H
+#define _DISK_H
 
 /* The default size of the disk and file system block */
 #define BLOCKSIZE 256

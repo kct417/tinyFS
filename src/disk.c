@@ -1,8 +1,7 @@
-#include "libDisk.h"
-#include "Disk_errno.h"
+#include "disk.h"
+#include "disk_errno.h"
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -12,7 +11,7 @@ int openDisk(char *filename, int nBytes)
     // check for filename
     if (!filename)
     {
-        dsk_errno = DSK_EINVAL;
+        dsk_errno = DSK_ERR_INVALID_ARGUMENT;
         return DSK_FAILURE;
     }
 
@@ -30,7 +29,7 @@ int openDisk(char *filename, int nBytes)
     {
         if (strcmp(fileExtension, ".dsk") != 0)
         {
-            dsk_errno = DSK_EINVAL;
+            dsk_errno = DSK_ERR_INVALID_ARGUMENT;
             return DSK_FAILURE;
         }
     }
@@ -42,7 +41,7 @@ int openDisk(char *filename, int nBytes)
         // open existing disk
         if ((fd = open(filename, O_RDWR)) == -1)
         {
-            dsk_errno = DSK_EOPEN;
+            dsk_errno = DSK_ERR_OPEN;
             return DSK_FAILURE;
         }
         return fd;
@@ -51,23 +50,23 @@ int openDisk(char *filename, int nBytes)
     // return failure if nBytes < BLOCKSIZE
     if (nBytes < BLOCKSIZE)
     {
-        dsk_errno = DSK_EINVAL;
+        dsk_errno = DSK_ERR_INVALID_ARGUMENT;
         return DSK_FAILURE;
     }
 
     // create or overwrite file
     if ((fd = open(filename, O_RDWR | O_CREAT | O_TRUNC, 0777)) == -1)
     {
-        dsk_errno = DSK_EOPEN;
+        dsk_errno = DSK_ERR_OPEN;
         return DSK_FAILURE;
     }
-    // alloc disk space for open file nBytes rounded to nearest multiple of BLOCKSIZE
+    // round to nearest multiple of BLOCKSIZE
     nBytes -= nBytes % BLOCKSIZE;
     char buffer[nBytes];
     memset(buffer, 0x00, nBytes);
     if (write(fd, buffer, nBytes) != nBytes)
     {
-        dsk_errno = DSK_EWRITE;
+        dsk_errno = DSK_ERR_WRITE;
         return DSK_FAILURE;
     }
 
@@ -80,14 +79,14 @@ int closeDisk(int disk)
     // check for file descriptor
     if (disk == -1)
     {
-        dsk_errno = DSK_EBADF;
+        dsk_errno = DSK_ERR_FILE_DESCRIPTOR;
         return DSK_FAILURE;
     }
 
     // close file descriptor
     if (close(disk) == -1)
     {
-        dsk_errno = DSK_ECLOSE;
+        dsk_errno = DSK_ERR_CLOSE;
         return DSK_FAILURE;
     }
 
@@ -100,7 +99,7 @@ int readBlock(int disk, int bNum, void *block)
     // check for invalid input
     if (disk == -1 || bNum < 0 || block == NULL)
     {
-        dsk_errno = DSK_EINVAL;
+        dsk_errno = DSK_ERR_INVALID_ARGUMENT;
         return DSK_FAILURE;
     }
 
@@ -108,21 +107,21 @@ int readBlock(int disk, int bNum, void *block)
     off_t offset = bNum * BLOCKSIZE;
     if (lseek(disk, offset, SEEK_SET) == -1)
     {
-        dsk_errno = DSK_ESEEK;
+        dsk_errno = DSK_ERR_SEEK;
         return DSK_FAILURE;
     }
 
     // read bytes into block buffer
     ssize_t bytesRead = 0;
-    if (bytesRead = read(disk, block, BLOCKSIZE) != BLOCKSIZE)
+    if ((bytesRead = read(disk, block, BLOCKSIZE)) != BLOCKSIZE)
     {
         if (bytesRead == 0)
         {
-            dsk_errno = DSK_EOF;
+            dsk_errno = DSK_ERR_END_OF_FILE;
             return DSK_SUCCESS;
         }
 
-        dsk_errno = DSK_EREAD;
+        dsk_errno = DSK_ERR_READ;
         return DSK_FAILURE;
     }
 
@@ -135,7 +134,7 @@ int writeBlock(int disk, int bNum, void *block)
     // check for bad input
     if (disk == -1 || bNum < 0 || block == NULL)
     {
-        dsk_errno = DSK_EINVAL;
+        dsk_errno = DSK_ERR_INVALID_ARGUMENT;
         return DSK_FAILURE;
     }
 
@@ -143,14 +142,14 @@ int writeBlock(int disk, int bNum, void *block)
     off_t offset = bNum * BLOCKSIZE;
     if (lseek(disk, offset, SEEK_SET) == -1)
     {
-        dsk_errno = DSK_ESEEK;
+        dsk_errno = DSK_ERR_SEEK;
         return DSK_FAILURE;
     }
 
     // write bytes into block buffer
     if (write(disk, block, BLOCKSIZE) != BLOCKSIZE)
     {
-        dsk_errno = DSK_EWRITE;
+        dsk_errno = DSK_ERR_WRITE;
         return DSK_FAILURE;
     }
 

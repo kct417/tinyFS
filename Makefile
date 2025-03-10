@@ -22,40 +22,26 @@ LIBS = $(LDIR)/libTinyFS.a $(LDIR)/libDisk.a
 # Test Programs
 TESTS = diskTest tfsTest
 
+# Object Files
+OBJS = $(ODIR)/tinyFSDemo.o $(ODIR)/tinyFS.o $(ODIR)/disk.o $(ODIR)/diskTest.o $(ODIR)/tfsTest.o
+
 # Default
-all: $(PROG) $(TESTS)
+all: $(PROG)
 
 # Make
 libs: $(LIBS)
 tests: $(TESTS)
 
-# Program Object Files
-$(ODIR)/tinyFSDemo.o: $(SDIR)/tinyFSDemo.c
-	$(CC) $(CFLAGS) -c -o $@ $^
-
-$(ODIR)/libTinyFS.o: $(SDIR)/libTinyFS.c $(ODIR)/libDisk.o
-	$(CC) $(CFLAGS) -c -o $@ $^
-
-$(ODIR)/libDisk.o: $(SDIR)/libDisk.c
-	$(CC) $(CFLAGS) -c -o $@ $^
-
-# Libraries
-$(LDIR)/libTinyFS.a: $(ODIR)/libDisk.o $(ODIR)/libTinyFS.o
-	ar r $@ $^
-
-$(LDIR)/libDisk.a: $(ODIR)/libDisk.o
-	ar r $@ $^
-
 # Program
 tinyFSDemo: $(ODIR)/tinyFSDemo.o $(LDIR)/libTinyFS.a
-	$(CC) $(CFLAGS) -o $@ $< -Llib -lTinyFS
+	$(CC) $(CFLAGS) -o $@ $< -L$(LDIR) -lTinyFS
 
-# Test Object Files
-$(ODIR)/diskTest.o: $(TDIR)/diskTest.c
-	$(CC) $(CFLAGS) -c -o $@ $^
+# Libraries
+$(LDIR)/libTinyFS.a: $(ODIR)/disk.o $(ODIR)/tinyFS.o
+	ar r $@ $^
 
-$(ODIR)/tfsTest.o: $(TDIR)/tfsTest.c
-	$(CC) $(CFLAGS) -c -o $@ $^
+$(LDIR)/libDisk.a: $(ODIR)/disk.o
+	ar r $@ $^
 
 # Test Programs
 diskTest: $(ODIR)/diskTest.o $(LDIR)/libDisk.a
@@ -64,11 +50,40 @@ diskTest: $(ODIR)/diskTest.o $(LDIR)/libDisk.a
 tfsTest: $(ODIR)/tfsTest.o $(LDIR)/libTinyFS.a
 	$(CC) $(CFLAGS) -o tfsTest $< -L$(LDIR) -lTinyFS
 
+# Program Object Files
+$(ODIR)/tinyFSDemo.o: $(SDIR)/tinyFSDemo.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+$(ODIR)/tinyFS.o: $(SDIR)/tinyFS.c $(ODIR)/disk.o
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+$(ODIR)/disk.o: $(SDIR)/disk.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+# Test Program Object Files
+$(ODIR)/diskTest.o: $(TDIR)/diskTest.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+$(ODIR)/tfsTest.o: $(TDIR)/tfsTest.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+# Clean
 clean:
-	rm -f $(ODIR)/*.o $(LDIR)/*.a *.dsk afile bfile
+	rm -f $(OBJS)
 
-cleanall:
-	rm -f $(PROG) $(TESTS) $(ODIR)/*.o $(LDIR)/*.a *.dsk afile bfile
-
-cleandisk:
+clean-fs:
 	rm -f *.dsk
+
+clean-all:
+	rm -f $(PROG)
+	rm -f $(TESTS)
+	rm -f $(LIBS)
+	rm -f $(OBJS)
+	rm -f *.dsk
+
+# Rebuild
+rebuild: clean-all
+	make
+
+rebuild-tests: clean-all
+	make tests
