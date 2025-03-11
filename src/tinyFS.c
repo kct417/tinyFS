@@ -962,7 +962,46 @@ int tfs_readFileInfo(fileDescriptor FD, fileStat *stats)
     return TFS_SUCCESS;
 }
 
-int tfs_displayFragments(int *bitmap)
+// int tfs_displayFragments()
+// {
+//     // check if disk is mounted
+//     if (!md.mounted)
+//     {
+//         tfs_errno = TFS_ERR_NO_DISK;
+//         return TFS_FAILURE;
+//     }
+    
+//     // initialize bitmap
+//     int *bitmap = malloc(sizeof(int) * (md.size / BLOCKSIZE));
+//     if (!bitmap)
+//     {
+//         tfs_errno = TFS_ERR_NO_MEMORY;
+//         return TFS_FAILURE;
+//     }
+//     int numBlocks = md.size / BLOCKSIZE;
+    
+//     memset(bitmap, 0, sizeof(int) * numBlocks);
+    
+//     // display fragments
+//     block_t block;
+//     for (int i = 0; i < numBlocks; i++)
+//     {
+//         // read block
+//         if (readBlock(md.disk_descriptor, i, &block) == -1)
+//         {
+//             tfs_errno = TFS_ERR_READ;
+//             return TFS_FAILURE;
+//         }
+
+//         // set bitmap entry to block type
+//         bitmap[i] = block.type;
+//     }
+
+//     tfs_errno = TFS_SUCCESS;
+//     return bitmap;
+// }
+
+int tfs_displayFragments()
 {
     // check if disk is mounted
     if (!md.mounted)
@@ -970,46 +1009,21 @@ int tfs_displayFragments(int *bitmap)
         tfs_errno = TFS_ERR_NO_DISK;
         return TFS_FAILURE;
     }
-
+    
     // initialize bitmap
-    memset(bitmap, 0, sizeof(int) * NUM_BLOCKS);
-
+    int *bitmap = malloc(sizeof(int) * (md.size / BLOCKSIZE));
+    if (!bitmap)
+    {
+        tfs_errno = TFS_ERR_NO_MEMORY;
+        return TFS_FAILURE;
+    }
+    int numBlocks = md.size / BLOCKSIZE;
+    
+    memset(bitmap, 0, sizeof(int) * numBlocks);
+    
     // display fragments
     block_t block;
-    int total_blocks = NUM_BLOCKS;
-    for (int i = 0; i < total_blocks; i++)
-    {
-        // read block
-        if (readBlock(md.disk_descriptor, i, &block) == -1)
-        {
-            tfs_errno = TFS_ERR_READ;
-            return TFS_FAILURE;
-        }
-
-        // set bitmap entry to block type
-        bitmap[i] = block.type;
-    }
-
-    tfs_errno = TFS_SUCCESS;
-    return TFS_SUCCESS;
-}
-
-int tfs_displayMap(int *bitmap)
-{
-    // check if disk is mounted
-    if (!md.mounted)
-    {
-        tfs_errno = TFS_ERR_NO_DISK;
-        return TFS_FAILURE;
-    }
-
-    // initialize bitmap
-    memset(bitmap, 0, sizeof(int) * NUM_BLOCKS);
-
-    // display map
-    block_t block;
-    int total_blocks = NUM_BLOCKS;
-    for (int i = 0; i < total_blocks; i++)
+    for (int i = 0; i < numBlocks; i++)
     {
         // read block
         if (readBlock(md.disk_descriptor, i, &block) == -1)
@@ -1047,15 +1061,15 @@ int tfs_defrag()
     }
 
     // Read all blocks into memory
-    int total_blocks = NUM_BLOCKS;
-    block_t *blocks = malloc(total_blocks * sizeof(block_t));
+    int numBlocks = md.size / BLOCKSIZE;
+    block_t *blocks = malloc(numBlocks * sizeof(block_t));
     if (!blocks)
     {
         tfs_errno = TFS_ERR_NO_MEMORY;
         return TFS_FAILURE;
     }
 
-    for (int i = 0; i < total_blocks; i++)
+    for (int i = 0; i < numBlocks; i++)
     {
         if (readBlock(md.disk_descriptor, i, &blocks[i]) == -1)
         {
@@ -1068,8 +1082,8 @@ int tfs_defrag()
     // Identify used and free blocks
     int used_block_count = 0;
     int free_block_count = 0;
-    int *used_blocks = malloc(total_blocks * sizeof(int));
-    int *free_blocks = malloc(total_blocks * sizeof(int));
+    int *used_blocks = malloc(numBlocks * sizeof(int));
+    int *free_blocks = malloc(numBlocks * sizeof(int));
     if (!used_blocks || !free_blocks)
     {
         free(blocks);
@@ -1079,7 +1093,7 @@ int tfs_defrag()
         return TFS_FAILURE;
     }
 
-    for (int i = 0; i < total_blocks; i++)
+    for (int i = 0; i < numBlocks; i++)
     {
         if (blocks[i].type == 0 || blocks[i].type == 4)
         {
@@ -1168,7 +1182,7 @@ int tfs_defrag()
     }
 
     // Write the blocks back to the disk
-    for (int i = 0; i < total_blocks; i++)
+    for (int i = 0; i < numBlocks; i++)
     {
         if (writeBlock(md.disk_descriptor, i, &blocks[i]) == -1)
         {

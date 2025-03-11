@@ -86,7 +86,7 @@ int tfs_writeByte(fileDescriptor FD, unsigned int data);
 /* this function allows the user to see a map of all blocks with the non-free
 blocks clearly designated. You can return this as a linked list or a bit map
 which you can use to display the map with */
-int tfs_displayFragments(int *bitmap);
+int tfs_displayFragments();
 
 /* moves blocks such that all free blocks are contiguous at the end of the
 disk. This should be verifiable with the tfs_displayFraments() function */

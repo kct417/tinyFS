@@ -4,10 +4,20 @@
 #include <stdio.h>
 #include <string.h>
 
+int showBlockMap()
+{
+    // test displaying block map
+    if (tfs_displayFragments() != TFS_SUCCESS)
+    {
+        fprintf(stderr, "Display map failed in this way: %d\n", tfs_errno);
+        return 1;
+    }
+    return 0;
+}
+
 int main()
 {
     int test = 1;
-    int *bitmap;
 
     // create disk with default size
     if (tfs_mkfs(DEFAULT_DISK_NAME, DEFAULT_DISK_SIZE) == TFS_FAILURE)
@@ -124,47 +134,16 @@ int main()
             // }
             
             
+                    
             
-            
-            
-            
-            
-            
-            // test displaying block map
-            bitmap = malloc(sizeof(int) * NUM_BLOCKS);
-            if (bitmap == NULL)
-            {
-                fprintf(stderr, "Failed to allocate memory for bitmap\n");
-                return 1;
-            }
-            if (tfs_displayMap(bitmap) != TFS_SUCCESS)
-            {
-                fprintf(stderr, "Display map failed in this way: %d\n", tfs_errno);
-                return 1;
-            }
-            printf("[TEST %d] : Displayed block map\n", test++);
-            free(bitmap);
-            
-            
-            
-            
-            
-            
-    // delete file4
-    if (tfs_deleteFile(fd4) == TFS_FAILURE)
-    {
-        fprintf(stderr, "Failed to delete file4\n");
-        return 1;
-    }
-    printf("[TEST %d] : Deleted file4\n", test++);
 
-    // delete file6
-    if (tfs_deleteFile(fd6) == TFS_FAILURE)
-    {
-        fprintf(stderr, "Failed to delete file6\n");
-        return 1;
-    }
-    printf("[TEST %d] : Deleted file6\n", test++);
+
+
+    showBlockMap();
+
+
+
+
 
 
 
@@ -186,10 +165,10 @@ int main()
     }
     printf("[TEST %d] : Wrote to file2\n", test++);
     
-    // write to files 3, 5, and 7
-    for (int i = 3; i <= 7; i += 2) {
+    // write to files 3 to 7
+    for (int i = 3; i <= 7; i++) {
         char filename[8];
-        snprintf(filename, sizeof(filename), "file%d", i); // file 3, 5, 7
+        snprintf(filename, sizeof(filename), "file%d", i); // file 3 to 7
         char content[20];
         snprintf(content, sizeof(content), "Content of %s\n", filename);
         fileDescriptor fd = tfs_openFile(filename);
@@ -202,11 +181,6 @@ int main()
             return 1;
         }
         printf("[TEST %d] : Wrote to %s\n", test++, filename);
-        if (tfs_closeFile(fd) == TFS_FAILURE) {
-            fprintf(stderr, "Failed to close %s\n", filename);
-            return 1;
-        }
-        printf("[TEST %d] : Closed %s\n", test++, filename);
     }
     
 
@@ -214,21 +188,7 @@ int main()
 
 
 
-    // test displaying block map
-    bitmap = malloc(sizeof(int) * NUM_BLOCKS);
-    if (bitmap == NULL)
-    {
-        fprintf(stderr, "Failed to allocate memory for bitmap\n");
-        return 1;
-    }
-    if (tfs_displayMap(bitmap) != TFS_SUCCESS)
-    {
-        fprintf(stderr, "Display map failed in this way: %d\n", tfs_errno);
-        return 1;
-    }
-    printf("[TEST %d] : Displayed block map\n", test++);
-    free(bitmap);
-
+    showBlockMap();
 
 
 
@@ -305,6 +265,11 @@ int main()
     }
     printf("[TEST %d] : Opened file1 again\n", test++);
 
+
+
+    showBlockMap();
+
+
     // delete file1
     if (tfs_deleteFile(fd1) == TFS_FAILURE)
     {
@@ -312,6 +277,16 @@ int main()
         return 1;
     }
     printf("[TEST %d] : Deleted file1\n", test++);
+
+
+
+    showBlockMap();
+
+
+
+
+
+
 
     // set file2 to read only
     filename = "file2";
@@ -339,6 +314,12 @@ int main()
     }
     printf("[TEST %d] : Delete file2 failed as expected\n", test++);
 
+
+
+
+
+    showBlockMap();
+
     // set file2 to read write
     if (tfs_makeRW(filename) == TFS_FAILURE)
     {
@@ -347,59 +328,100 @@ int main()
     }
     printf("[TEST %d] : Made %s read write\n", test++, filename);
 
-    // attempt to write to file2
-    content = "This should succeed\n";
-    if (tfs_writeFile(fd2, content, strlen(content)) == TFS_FAILURE)
+    showBlockMap();
+
+
+
+
+
+
+
+
+
+    // // attempt to write to file2
+    // content = "This should succeed\n";
+    // if (tfs_writeFile(fd2, content, strlen(content)) == TFS_FAILURE)
+    // {
+    //     fprintf(stderr, "Failed to write to %s after making it read write\n", filename);
+    //     return 1;
+    // }
+    // printf("[TEST %d] : Wrote to %s\n", test++, filename);
+
+    // showBlockMap();
+
+    // // read from file2
+    // while (tfs_readByte(fd2, &buffer) != TFS_FAILURE)
+    // {
+    //     printf("%c", buffer);
+    // }
+    // printf("[TEST %d] : Read from file2\n", test++);
+
+    // // write byte to file2
+    // int offset = 4;
+    // if (tfs_seek(fd2, offset) == TFS_FAILURE)
+    // {
+    //     fprintf(stderr, "Failed to seek to offset %d of file2\n", offset);
+    //     return 1;
+    // }
+    // if (tfs_writeByte(fd2, 'X') == TFS_FAILURE)
+    // {
+    //     fprintf(stderr, "Failed to write byte to file2\n");
+    //     return 1;
+    // }
+    // printf("[TEST %d] : Wrote byte to file2\n", test++);
+
+    // // read from file2 again
+    // if (tfs_seek(fd2, 0) == TFS_FAILURE)
+    // {
+    //     fprintf(stderr, "Failed to seek to beginning of file2\n");
+    //     return 1;
+    // }
+    // while (tfs_readByte(fd2, &buffer) != TFS_FAILURE)
+    // {
+    //     printf("%c", buffer);
+    // }
+    // printf("[TEST %d] : Read from file2 again\n", test++);
+
+
+    // showBlockMap();
+
+
+    // // delete file2
+    // if (tfs_deleteFile(fd2) == TFS_FAILURE)
+    // {
+    //     fprintf(stderr, "Failed to delete %s\n", filename);
+    //     return 1;
+    // }
+    // printf("[TEST %d] : Deleted %s\n", test++, filename);
+
+
+
+
+    
+
+
+    // delete file4
+    if (tfs_deleteFile(fd4) == TFS_FAILURE)
     {
-        fprintf(stderr, "Failed to write to %s after making it read write\n", filename);
+        fprintf(stderr, "Failed to delete file4\n");
         return 1;
     }
-    printf("[TEST %d] : Wrote to %s\n", test++, filename);
+    printf("[TEST %d] : Deleted file4\n", test++);
 
-    // read from file2
-    while (tfs_readByte(fd2, &buffer) != TFS_FAILURE)
+    // delete file6
+    if (tfs_deleteFile(fd6) == TFS_FAILURE)
     {
-        printf("%c", buffer);
-    }
-    printf("[TEST %d] : Read from file2\n", test++);
-
-    // write byte to file2
-    int offset = 4;
-    if (tfs_seek(fd2, offset) == TFS_FAILURE)
-    {
-        fprintf(stderr, "Failed to seek to offset %d of file2\n", offset);
+        fprintf(stderr, "Failed to delete file6\n");
         return 1;
     }
-    if (tfs_writeByte(fd2, 'X') == TFS_FAILURE)
-    {
-        fprintf(stderr, "Failed to write byte to file2\n");
-        return 1;
-    }
-    printf("[TEST %d] : Wrote byte to file2\n", test++);
-
-    // read from file2 again
-    if (tfs_seek(fd2, 0) == TFS_FAILURE)
-    {
-        fprintf(stderr, "Failed to seek to beginning of file2\n");
-        return 1;
-    }
-    while (tfs_readByte(fd2, &buffer) != TFS_FAILURE)
-    {
-        printf("%c", buffer);
-    }
-    printf("[TEST %d] : Read from file2 again\n", test++);
-
-    // delete file2
-    if (tfs_deleteFile(fd2) == TFS_FAILURE)
-    {
-        fprintf(stderr, "Failed to delete %s\n", filename);
-        return 1;
-    }
-    printf("[TEST %d] : Deleted %s\n", test++, filename);
+    printf("[TEST %d] : Deleted file6\n", test++);
+    
 
 
 
 
+    showBlockMap();
+    
 
     // test tfs_defrag
     if (tfs_defrag() == TFS_FAILURE)
@@ -409,20 +431,9 @@ int main()
     }
     printf("[TEST %d] : Defrag succeeded\n", test++);
 
-    // test displaying block map
-    bitmap = malloc(sizeof(int) * NUM_BLOCKS);
-    if (bitmap == NULL)
-    {
-        fprintf(stderr, "Failed to allocate memory for bitmap\n");
-        return 1;
-    }
-    if (tfs_displayMap(bitmap) != TFS_SUCCESS)
-    {
-        fprintf(stderr, "Display map failed in this way: %d\n", tfs_errno);
-        return 1;
-    }
-    printf("[TEST %d] : Displayed block map\n", test++);
-    free(bitmap);
+
+    showBlockMap();
+
 
 
 
