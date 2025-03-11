@@ -32,6 +32,10 @@ int main()
     }
     printf("[TEST %d] : Disk mount failed as expected\n", test++);
 
+    // list directory (should be empty)
+    printf("[TEST %d] : Listing directory contents (should be empty)\n", test++);
+    tfs_readdir();
+
     // open file1
     char *filename = "file1";
     fileDescriptor fd1 = tfs_openFile(filename);
@@ -52,6 +56,32 @@ int main()
     }
     printf("[TEST %d] : Opened %s\n", test++, filename);
 
+     // list directory (should list files 1 and 2)
+    printf("[TEST %d] : Listing directory contents (should contain file1 and file2)\n", test++);
+    tfs_readdir();
+
+    // rename file2 -> file3
+    char *new_name = "file3";
+    if (tfs_rename(fd2, new_name) == TFS_FAILURE)
+    {
+        fprintf(stderr, "Failed to rename file2 to %s\n", new_name);
+        return 1;
+    }
+    printf("[TEST %d] : Renamed file2 to %s\n", test++, new_name);
+
+    // attempt to renamed to exceeded length filename
+    char *exceeded_name = "renamed_file";
+    if (tfs_rename(fd2, exceeded_name) != TFS_FAILURE)
+    {
+        fprintf(stderr, "File renamed, but should've failed\n");
+        return 1;
+    }
+    printf("[TEST %d] : Failed to rename file3 to %s, as expected\n", test++, exceeded_name);
+
+    // list directory contents (should contain file1 and file3)
+    printf("[TEST %d] : Listing directory contents (should contain file1 and file3)\n", test++);
+    tfs_readdir();
+
     // write to file1
     char *content = "Hello, world!\n";
     if (tfs_writeFile(fd1, content, strlen(content)) == TFS_FAILURE)
@@ -61,14 +91,14 @@ int main()
     }
     printf("[TEST %d] : Wrote to file1\n", test++);
 
-    // write to file2
+    // write to file3
     content = "Goodbye, world!\n";
     if (tfs_writeFile(fd2, content, strlen(content)) == TFS_FAILURE)
     {
         fprintf(stderr, "Failed to write to file2\n");
         return 1;
     }
-    printf("[TEST %d] : Wrote to file2\n", test++);
+    printf("[TEST %d] : Wrote to file3\n", test++);
 
     // read from file1
     char buffer;
@@ -78,12 +108,12 @@ int main()
     }
     printf("[TEST %d] : Read from file1\n", test++);
 
-    // read from file2
+    // read from file3
     while (tfs_readByte(fd2, &buffer) != TFS_FAILURE)
     {
         printf("%c", buffer);
     }
-    printf("[TEST %d] : Read from file2\n", test++);
+    printf("[TEST %d] : Read from file3\n", test++);
 
     // attempt to read from file1 again
     if (tfs_readByte(fd1, &buffer) != TFS_FAILURE)
@@ -137,6 +167,19 @@ int main()
         return 1;
     }
     printf("[TEST %d] : Deleted file1\n", test++);
+
+    // rename file3 -> file2
+    char *original_name = "file2";
+    if (tfs_rename(fd2, original_name) == TFS_FAILURE)
+    {
+        fprintf(stderr, "Failed to rename file3 to %s\n", original_name);
+        return 1;
+    }
+    printf("[TEST %d] : Renamed file3 to %s\n", test++, original_name);
+
+    // list directory contents (should contain only file 2)
+    printf("[TEST %d] : Listing directory contents (should only contain file2)\n", test++);
+    tfs_readdir();
 
     // set file2 to read only
     filename = "file2";

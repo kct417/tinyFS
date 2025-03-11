@@ -74,6 +74,13 @@ int tfs_makeRW(char *name);
 
 /* uses current file pointer instead of offset) */
 int tfs_writeByte(fileDescriptor FD, unsigned int data);
+/* renames a file. new name should be passed in. 
+file has to be open. */
+int tfs_rename(fileDescriptor FD, char* newName); 
+
+/* lists all the files and directories on the disk, print the
+list to stdout */
+void tfs_readdir();
 
 // internal definitions
 #define _TFS_MAGIC_NUMBER 0x44

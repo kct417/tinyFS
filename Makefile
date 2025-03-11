@@ -6,7 +6,7 @@
 SDIR = ./src
 IDIR = ./include
 LDIR = ./lib
-ODIR = ./obj
+ODIR = ./test
 TDIR = ./test_src
 
 # Compiler

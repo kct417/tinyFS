@@ -910,3 +910,61 @@ int tfs_writeByte(fileDescriptor FD, unsigned int data)
     tfs_errno = TFS_SUCCESS;
     return TFS_SUCCESS;
 }
+
+
+int tfs_rename(fileDescriptor FD, char *newName) {
+    // validate file descriptor
+    if (!file_table[FD].active)
+    {
+        tfs_errno = TFS_ERR_FILE_DESCRIPTOR;
+        return TFS_FAILURE;
+    }
+
+    // validate length and name
+    if (strlen(newName) > _TFS_MAX_FILENAME_LENGTH) {
+        tfs_errno = TFS_ERR_INVALID_ARGUMENT;
+        return TFS_FAILURE;
+    }
+
+    // Check if a file with the new name already exists
+    for (int i = 0; i < _TFS_MAX_INODES; i++) {
+        if (inode_table[i].active && strcmp(inode_table[i].inode.filename, newName) == 0) {
+            tfs_errno = TFS_ERR_INVALID_ARGUMENT;
+            return TFS_FAILURE;
+        }
+    }
+
+    // find inode idx
+    int inode_idx = file_table[FD].inode_table_entry;
+    if (!inode_table[inode_idx].active) {
+        tfs_errno = TFS_ERR_INVALID_ARGUMENT;
+        return TFS_FAILURE;
+    }
+
+    // rename
+    strncpy(inode_table[inode_idx].inode.filename, newName, _TFS_MAX_FILENAME_LENGTH);
+    inode_table[inode_idx].inode.filename[_TFS_MAX_FILENAME_LENGTH] = '\0';
+    // update file table
+    strncpy(file_table[FD].filename, newName, _TFS_MAX_FILENAME_LENGTH);
+    file_table[FD].filename[_TFS_MAX_FILENAME_LENGTH] = '\0';
+
+    return TFS_SUCCESS;
+}
+
+void tfs_readdir() {
+    printf("----------------- \n");
+    printf("TinyFS Directory: \n");
+
+    int count = 0;
+    for (int i = 0; i < _TFS_MAX_INODES; i++) {
+        if (inode_table[i].active) {
+            printf("*  %s\n", inode_table[i].inode.filename);
+            count++;
+        }
+    }
+
+    if (count == 0) {
+        printf("No files found.\n");
+    }
+    printf("----------------- \n");
+}
