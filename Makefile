@@ -1,5 +1,11 @@
 IDIR = ./include
+<<<<<<< HEAD
 TDIR = ./test
+=======
+LDIR = ./lib
+ODIR = ./test
+TDIR = ./test_src
+>>>>>>> ce99e5e (added rename and list dir)
 
 CC = gcc
 CFLAGS = -Wall -g -I$(IDIR) -std=gnu99
