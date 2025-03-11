@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "libDisk.h"
+#include "disk.h"
 
 #define NUM_TEST_DISKS 4 /* number of disks to test with */
 #define BLOCKSIZE 256

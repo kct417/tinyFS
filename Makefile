@@ -1,37 +1,89 @@
+# $@: target
+# $^: all prerequisites
+# $<: first prerequisite
+
+# File Architecture
+SDIR = ./src
 IDIR = ./include
 LDIR = ./lib
-ODIR = ./test
+ODIR = ./obj
 TDIR = ./test_src
 
+# Compiler
 CC = gcc
-CFLAGS = -Wall -g -I$(IDIR) -std=gnu99
+CFLAGS = -Wall -std=c99 -g -I$(IDIR)
+
+# Programs
 PROG = tinyFSDemo
-OBJS = tinyFSDemo.o libTinyFS.o libDisk.o
 
-TEST_PROG = tfsTest
-TEST_OBJS = $(TDIR)/tfsTest.o libDisk.o libTinyFS.o
+# Libraries
+LIBS = $(LDIR)/libTinyFS.a $(LDIR)/libDisk.a
 
-all: $(TEST_PROG)
+# Test Programs
+TESTS = diskTest tfsTest
 
-$(TEST_PROG): $(TEST_OBJS)
-	$(CC) $(CFLAGS) -o $(TEST_PROG) $(TEST_OBJS)
+# Object Files
+OBJS = $(ODIR)/tinyFSDemo.o $(ODIR)/tinyFS.o $(ODIR)/disk.o $(ODIR)/diskTest.o $(ODIR)/tfsTest.o
 
-$(TDIR)/tfsTest.o: $(TDIR)/tfsTest.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+# Default
+all: $(PROG)
 
-$(PROG): $(OBJS)
-	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
+# Make
+libs: $(LIBS)
+tests: $(TESTS)
 
-tinyFSDemo.o: ./src/tinyFSDemo.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+# Program
+tinyFSDemo: $(ODIR)/tinyFSDemo.o $(LDIR)/libTinyFS.a
+	$(CC) $(CFLAGS) -o $@ $< -L$(LDIR) -lTinyFS
 
-libTinyFS.o: ./src/libTinyFS.c libDisk.o
-	$(CC) $(CFLAGS) -c -o $@ $<
+# Libraries
+$(LDIR)/libTinyFS.a: $(ODIR)/disk.o $(ODIR)/tinyFS.o
+	ar r $@ $^
 
-libDisk.o: ./src/libDisk.c
-	$(CC) $(CFLAGS) -c -o $@ $<
-	
+$(LDIR)/libDisk.a: $(ODIR)/disk.o
+	ar r $@ $^
+
+# Test Programs
+diskTest: $(ODIR)/diskTest.o $(LDIR)/libDisk.a
+	$(CC) $(CFLAGS) -o diskTest $< -L$(LDIR) -lDisk
+
+tfsTest: $(ODIR)/tfsTest.o $(LDIR)/libTinyFS.a
+	$(CC) $(CFLAGS) -o tfsTest $< -L$(LDIR) -lTinyFS
+
+# Program Object Files
+$(ODIR)/tinyFSDemo.o: $(SDIR)/tinyFSDemo.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+$(ODIR)/tinyFS.o: $(SDIR)/tinyFS.c $(ODIR)/disk.o
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+$(ODIR)/disk.o: $(SDIR)/disk.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+# Test Program Object Files
+$(ODIR)/diskTest.o: $(TDIR)/diskTest.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+$(ODIR)/tfsTest.o: $(TDIR)/tfsTest.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+# Clean
 clean:
-	rm -f $(PROG) $(OBJS) $(TEST_PROG) $(TEST_OBJ) libDisk.o tinyFSDisk diskTest 
-	
+	rm -f $(OBJS)
+
+clean-fs:
 	rm -f *.dsk
+
+clean-all:
+	rm -f $(PROG)
+	rm -f $(TESTS)
+	rm -f $(LIBS)
+	rm -f $(OBJS)
+	rm -f *.dsk
+
+# Rebuild
+rebuild: clean-all
+	make
+
+rebuild-tests: clean-all
+	make tests

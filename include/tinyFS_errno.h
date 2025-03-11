@@ -1,12 +1,33 @@
-#define TFS_SUCCESS            0   // No error
-#define TFS_ERR_NO_DISK        -1  // No disk mounted
-#define TFS_ERR_INVALID_FD     -2  // Invalid file descriptor
-#define TFS_ERR_NO_FREE_BLOCKS -3  // No free blocks available
-#define TFS_ERR_READ_FAIL      -4  // Read error
-#define TFS_ERR_WRITE_FAIL     -5  // Write error
-#define TFS_ERR_FILE_NOT_FOUND -6  // File not found
-#define TFS_ERR_INVALID_BLOCK -7
-#define TFS_ERR_INVALID_FILE -8
-#define TFS_ERR_INVALID_PATH -9
-#define TFS_ERR_DIR -10
-#define TFS_ERR_REMOVE_FAIL -11
+#ifndef _TINYFS_ERRNO_H
+#define _TINYFS_ERRNO_H
+
+#define TFS_SUCCESS 0  // Success
+#define TFS_FAILURE -1 // Failure
+
+#define TFS_ERR_MOUNTED_DISK -2      // Mount error
+#define TFS_ERR_NO_DISK -3           // No such device
+#define TFS_ERR_CORRUPTED_DISK -4    // Invalid argument
+#define TFS_ERR_OPEN -5              // Open error
+#define TFS_ERR_CLOSE -6             // Close error
+#define TFS_ERR_READ -7              // Read error
+#define TFS_ERR_WRITE -8             // Write error
+#define TFS_ERR_DELETE -9            // Delete error
+#define TFS_ERR_SEEK -10             // Seek error
+#define TFS_ERR_INVALID_ARGUMENT -11 // Invalid argument
+#define TFS_ERR_FILE_DESCRIPTOR -12  // Bad file descriptor
+#define TFS_ERR_END_OF_FILE -13      // End of file
+#define TFS_ERR_FILE_LIMIT -14       // Too many open files in system
+#define TFS_ERR_NO_SPACE -15         // No space left on device
+#define TFS_ERR_READ_ONLY -16        // Read only file
+
+extern int tfs_errno;
+
+static inline int *get_tfs_errno()
+{
+    static int _tfs_errno = TFS_SUCCESS;
+    return &_tfs_errno;
+}
+
+#define tfs_errno (*get_tfs_errno())
+
+#endif
