@@ -10,6 +10,7 @@
 int main()
 {
     int test = 1;
+    fileDescriptor fd1, fd2;
     char *filename;
     char *content;
     char buffer;
@@ -45,7 +46,7 @@ int main()
 
     // open file1
     filename = "file1";
-    fileDescriptor fd1 = tfs_openFile(filename);
+    fd1 = tfs_openFile(filename);
     if (fd1 == TFS_FAILURE)
     {
         fprintf(stderr, "Failed to open %s\n", filename);
@@ -73,7 +74,7 @@ int main()
 
     // open file2
     filename = "file2";
-    fileDescriptor fd2 = tfs_openFile(filename);
+    fd2 = tfs_openFile(filename);
     if (fd2 == TFS_FAILURE)
     {
         fprintf(stderr, "Failed to open %s\n", filename);
@@ -125,7 +126,54 @@ int main()
     printf("[TEST %d] : Listing directory contents (should contain file1 and file3)\n", test++);
     tfs_readdir();
 
+    // unmount disk
+    if (tfs_unmount() == TFS_FAILURE)
+    {
+        fprintf(stderr, "Disk unmount error\n");
+        return 1;
+    }
+    printf("[TEST %d] : Disk unmounted\n", test++);
+
+    // mount disk
+    if (tfs_mount(DEFAULT_DISK_NAME) == TFS_FAILURE)
+    {
+        fprintf(stderr, "Disk mount error\n");
+        return 1;
+    }
+    printf("[TEST %d] : Disk mounted\n", test++);
+
+    // attempt to read file1
+    if (tfs_readByte(fd1, &buffer) != TFS_FAILURE)
+    {
+        fprintf(stderr, "File descriptor is at end of file, but read succeeded\n");
+        return 1;
+    }
+    printf("[TEST %d] : Read from file1 failed as expected\n", test++);
+
+    // open file1
+    fd1 = tfs_openFile("file1");
+    if (fd1 == TFS_FAILURE)
+    {
+        fprintf(stderr, "Failed to open file1\n");
+        return 1;
+    }
+    printf("[TEST %d] : Opened file1\n", test++);
+
+    // open file3
+    fd2 = tfs_openFile("file3");
+    if (fd2 == TFS_FAILURE)
+    {
+        fprintf(stderr, "Failed to open file3\n");
+        return 1;
+    }
+    printf("[TEST %d] : Opened file3\n", test++);
+
+    // list directory contents (should contain file1 and file3)
+    printf("[TEST %d] : Listing directory contents (should contain file1 and file3)\n", test++);
+    tfs_readdir();
+
     // get file3 times
+    filename = "file3";
     if (tfs_readFileInfo(fd2, &info) == TFS_FAILURE)
     {
         fprintf(stderr, "Failed to get times for %s\n", filename);

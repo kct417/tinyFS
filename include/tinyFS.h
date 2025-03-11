@@ -182,7 +182,7 @@ make multiple functions) */
 int tfs_readFileInfo(fileDescriptor FD, file_info *info);
 
 /* renames a file. new name should be passed in. file has to be open. */
-int tfs_rename(fileDescriptor FD, char *newName);
+int tfs_rename(fileDescriptor FD, char *filename);
 
 /* lists all the files and directories on the disk, print the list to
 stdout -- Note: if you don’t have hierarchical directories, this just
