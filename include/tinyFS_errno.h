@@ -19,6 +19,7 @@
 #define TFS_ERR_FILE_LIMIT -14       // Too many open files in system
 #define TFS_ERR_NO_SPACE -15         // No space left on device
 #define TFS_ERR_READ_ONLY -16        // Read only file
+#define TFS_ERR_NO_MEMORY -17        // Out of memory
 
 extern int tfs_errno;
 

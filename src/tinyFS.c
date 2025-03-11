@@ -962,7 +962,7 @@ int tfs_readFileInfo(fileDescriptor FD, fileStat *stats)
     return TFS_SUCCESS;
 }
 
-int tfs_displayFragments()
+int tfs_displayFragments(int *bitmap)
 {
     // check if disk is mounted
     if (!md.mounted)
@@ -971,93 +971,230 @@ int tfs_displayFragments()
         return TFS_FAILURE;
     }
 
+    // initialize bitmap
+    memset(bitmap, 0, sizeof(int) * NUM_BLOCKS);
+
     // display fragments
-    datablock_t datablock;
-    int block_number = md.superblock.free_block;
-    int fragments = 0;
-    while (block_number != 0)
+    block_t block;
+    int total_blocks = NUM_BLOCKS;
+    for (int i = 0; i < total_blocks; i++)
     {
-        // get data block
-        if (readBlock(md.disk_descriptor, block_number, &datablock) == -1)
+        // read block
+        if (readBlock(md.disk_descriptor, i, &block) == -1)
         {
             tfs_errno = TFS_ERR_READ;
             return TFS_FAILURE;
         }
 
-        // check for free block
-        if (datablock.type != 4)
-        {
-            tfs_errno = TFS_ERR_CORRUPTED_DISK;
-            return TFS_FAILURE;
-        }
-
-        // set next block
-        block_number = datablock.next_block;
-        fragments++;
+        // set bitmap entry to block type
+        bitmap[i] = block.type;
     }
 
     tfs_errno = TFS_SUCCESS;
-    return fragments;
+    return TFS_SUCCESS;
+}
+
+int tfs_displayMap(int *bitmap)
+{
+    // check if disk is mounted
+    if (!md.mounted)
+    {
+        tfs_errno = TFS_ERR_NO_DISK;
+        return TFS_FAILURE;
+    }
+
+    // initialize bitmap
+    memset(bitmap, 0, sizeof(int) * NUM_BLOCKS);
+
+    // display map
+    block_t block;
+    int total_blocks = NUM_BLOCKS;
+    for (int i = 0; i < total_blocks; i++)
+    {
+        // read block
+        if (readBlock(md.disk_descriptor, i, &block) == -1)
+        {
+            tfs_errno = TFS_ERR_READ;
+            return TFS_FAILURE;
+        }
+
+        // set bitmap entry to block type
+        bitmap[i] = block.type;
+    }
+
+    // print visual representation
+    printf("Block Map:\n");
+    for (int i = 0; i < 5; i++)
+    {
+        for (int j = 0; j < 8; j++)
+        {
+            printf("%d ", bitmap[i * 8 + j]);
+        }
+        printf("\n");
+    }
+
+    tfs_errno = TFS_SUCCESS;
+    return TFS_SUCCESS;
 }
 
 int tfs_defrag()
 {
-    // check if disk is mounted
+    // Check if disk is mounted
     if (!md.mounted)
     {
         tfs_errno = TFS_ERR_NO_DISK;
         return TFS_FAILURE;
     }
 
-    // defragment disk
-    datablock_t datablock;
-    freeblock_t freeblock;
-    memset(&freeblock, 0x00, BLOCKSIZE);
-    freeblock.type = 4;
-    freeblock.magic_number = md.superblock.magic_number;
-    int block_number = md.superblock.free_block;
-    int current_block = 0;
-    int total_blocks = md.size / BLOCKSIZE;
+    // Read all blocks into memory
+    int total_blocks = NUM_BLOCKS;
+    block_t *blocks = malloc(total_blocks * sizeof(block_t));
+    if (!blocks)
+    {
+        tfs_errno = TFS_ERR_NO_MEMORY;
+        return TFS_FAILURE;
+    }
+
     for (int i = 0; i < total_blocks; i++)
     {
-        // get data block
-        if (readBlock(md.disk_descriptor, block_number, &datablock) == -1)
+        if (readBlock(md.disk_descriptor, i, &blocks[i]) == -1)
         {
+            free(blocks);
             tfs_errno = TFS_ERR_READ;
             return TFS_FAILURE;
         }
+    }
 
-        // check for free block
-        if (datablock.type == 4)
+    // Identify used and free blocks
+    int used_block_count = 0;
+    int free_block_count = 0;
+    int *used_blocks = malloc(total_blocks * sizeof(int));
+    int *free_blocks = malloc(total_blocks * sizeof(int));
+    if (!used_blocks || !free_blocks)
+    {
+        free(blocks);
+        free(used_blocks);
+        free(free_blocks);
+        tfs_errno = TFS_ERR_NO_MEMORY;
+        return TFS_FAILURE;
+    }
+
+    for (int i = 0; i < total_blocks; i++)
+    {
+        if (blocks[i].type == 0 || blocks[i].type == 4)
         {
-            // set free block to superblock free block
-            freeblock.next_block = md.superblock.free_block;
-            // set superblock free block to current block
-            md.superblock.free_block = current_block;
-
-            // write free block to disk
-            if (writeBlock(md.disk_descriptor, block_number, &freeblock) == -1)
-            {
-                tfs_errno = TFS_ERR_WRITE;
-                return TFS_FAILURE;
-            }
-
-            // write superblock to disk
-            if (writeBlock(md.disk_descriptor, 0, &md.superblock) == -1)
-            {
-                tfs_errno = TFS_ERR_WRITE;
-                return TFS_FAILURE;
-            }
+            free_blocks[free_block_count++] = i;
         }
         else
         {
-            // set next block
-            current_block++;
+            used_blocks[used_block_count++] = i;
         }
-
-        // set next block
-        block_number = datablock.next_block;
     }
+
+    // Move used blocks to the beginning of blocks organizer
+    // int next_free_block = used_block_count; // free blocks start at the end of used blocks
+    for (int i = 0; i < used_block_count; i++)
+    {
+        if (used_blocks[i] != i)
+        {
+            blocks[i] = blocks[used_blocks[i]];
+            used_blocks[i] = i;
+        }
+    }
+
+    // Update the inode table
+    for (int i = 0; i < _TFS_MAX_INODES; i++)
+    {
+        if (inode_table[i].active)
+        {
+            inodeblock_t *inode = &inode_table[i].inode;
+            int block_number = inode->first_block;
+            int new_block_number = -1;
+            int prev_block_number = -1;
+
+            while (block_number != 0)
+            {
+                for (int j = 0; j < used_block_count; j++)
+                {
+                    if (used_blocks[j] == block_number)
+                    {
+                        new_block_number = j;
+                        break;
+                    }
+                }
+
+                if (prev_block_number == -1)
+                {
+                    inode->first_block = new_block_number;
+                }
+                else
+                {
+                    blocks[prev_block_number].next_block = new_block_number;
+                }
+
+                prev_block_number = new_block_number;
+                block_number = blocks[block_number].next_block;
+            }
+
+            if (prev_block_number != -1)
+            {
+                blocks[prev_block_number].next_block = 0;
+            }
+        }
+    }
+
+    // Update the file table
+    for (int i = 0; i < _TFS_MAX_INODES; i++)
+    {
+        if (file_table[i].active)
+        {
+            int inode_index = file_table[i].inode_table_entry;
+            inodeblock_t *inode = &inode_table[inode_index].inode;
+            int block_number = inode->first_block;
+            int offset = 0;
+
+            while (block_number != 0)
+            {
+                if (offset <= file_table[i].file_descriptor && file_table[i].file_descriptor < offset + _TFS_EFFECTIVE_DATA_SIZE)
+                {
+                    file_table[i].file_descriptor = block_number * _TFS_EFFECTIVE_DATA_SIZE + (file_table[i].file_descriptor - offset);
+                    break;
+                }
+
+                offset += _TFS_EFFECTIVE_DATA_SIZE;
+                block_number = blocks[block_number].next_block;
+            }
+        }
+    }
+
+    // Write the blocks back to the disk
+    for (int i = 0; i < total_blocks; i++)
+    {
+        if (writeBlock(md.disk_descriptor, i, &blocks[i]) == -1)
+        {
+            free(blocks);
+            free(used_blocks);
+            free(free_blocks);
+            tfs_errno = TFS_ERR_WRITE;
+            return TFS_FAILURE;
+        }
+    }
+
+    // Update the superblock
+    md.superblock.free_block = used_block_count;
+    if (writeBlock(md.disk_descriptor, 0, &md.superblock) == -1)
+    {
+        free(blocks);
+        free(used_blocks);
+        free(free_blocks);
+        tfs_errno = TFS_ERR_WRITE;
+        return TFS_FAILURE;
+    }
+
+    // Free allocated memory
+    free(blocks);
+    free(used_blocks);
+    free(free_blocks);
 
     tfs_errno = TFS_SUCCESS;
     return TFS_SUCCESS;

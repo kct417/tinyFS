@@ -14,6 +14,8 @@ total. This is a default size. You must be able to support different
 possible values */
 #define DEFAULT_DISK_SIZE 10240
 
+#define NUM_BLOCKS (DEFAULT_DISK_SIZE / BLOCKSIZE)
+
 /* use this name for a default emulated disk file name */
 #define DEFAULT_DISK_NAME "tinyFSDisk"
 
@@ -80,16 +82,11 @@ int tfs_makeRW(char *name);
 /* uses current file pointer instead of offset) */
 int tfs_writeByte(fileDescriptor FD, unsigned int data);
 
-/* TIMESTAMPS */
-/* Retrieves file information such as size, creation time, and modification
-time and places it where stats points to */
-int tfs_readFileInfo(fileDescriptor FD, fileStat *stats);
-
 /* DEFRAG */
 /* this function allows the user to see a map of all blocks with the non-free
 blocks clearly designated. You can return this as a linked list or a bit map
 which you can use to display the map with */
-int tfs_displayFragments();
+int tfs_displayFragments(int *bitmap);
 
 /* moves blocks such that all free blocks are contiguous at the end of the
 disk. This should be verifiable with the tfs_displayFraments() function */
@@ -202,6 +199,12 @@ typedef struct fileStat
     time_t access_time;
     int read_only;
 } fileStat;
+
+
+/* TIMESTAMPS */
+/* Retrieves file information such as size, creation time, and modification
+time and places it where stats points to */
+int tfs_readFileInfo(fileDescriptor FD, fileStat *stats);
 
 
 #endif
