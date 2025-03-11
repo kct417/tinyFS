@@ -62,18 +62,31 @@ int tfs_readByte(fileDescriptor FD, char *buffer);
 success/error codes.*/
 int tfs_seek(fileDescriptor FD, int offset);
 
+/* makes the file read only. If a file is RO, all tfs_write() and
+tfs_deleteFile() functions that try to use it fail. */
+int tfs_makeRO(char *name);
+
+/* makes the file read-write */
+int tfs_makeRW(char *name);
+
+/* write one byte to an exact position inside the file. */
+// int tfs_writeByte(fileDescriptor FD, int offset, unsigned int data);
+
+/* uses current file pointer instead of offset) */
+int tfs_writeByte(fileDescriptor FD, unsigned int data);
+
 // internal definitions
-#define MAGIC_NUMBER 0x44
+#define _TFS_MAGIC_NUMBER 0x44
 
-#define MAX_FILENAME_LENGTH 8
-#define MAX_INODES 8
+#define _TFS_MAX_FILENAME_LENGTH 8
+#define _TFS_MAX_INODES 8
 
-#define BLOCK_PADDING (BLOCKSIZE - sizeof(unsigned char) * 4 - sizeof(int))
-#define SUPERBLOCK_PADDING (BLOCKSIZE - sizeof(unsigned char) * 4 - sizeof(int) * 2)
-#define INODEBLOCK_PADDING (BLOCKSIZE - sizeof(unsigned char) * 4 - sizeof(int) * 2 - MAX_FILENAME_LENGTH - 1)
-#define FREEBLOCK_PADDING (BLOCKSIZE - sizeof(unsigned char) * 4 - sizeof(int))
+#define _TFS_BLOCK_PADDING (BLOCKSIZE - sizeof(unsigned char) * 4 - sizeof(int))
+#define _TFS_SUPERBLOCK_PADDING (BLOCKSIZE - sizeof(unsigned char) * 4 - sizeof(int) * 2)
+#define _TFS_INODEBLOCK_PADDING (BLOCKSIZE - sizeof(unsigned char) * 4 - sizeof(int) * 3 - _TFS_MAX_FILENAME_LENGTH - 1)
+#define _TFS_FREEBLOCK_PADDING (BLOCKSIZE - sizeof(unsigned char) * 4 - sizeof(int))
 
-#define EFFECTIVE_DATA_SIZE (BLOCKSIZE - sizeof(unsigned char) * 4 - sizeof(int))
+#define _TFS_EFFECTIVE_DATA_SIZE (BLOCKSIZE - sizeof(unsigned char) * 4 - sizeof(int))
 
 // type definitions
 typedef struct block_t
@@ -83,7 +96,7 @@ typedef struct block_t
     unsigned char block_address;
     unsigned char empty;
     int next_block;
-    unsigned char data[BLOCK_PADDING];
+    unsigned char data[_TFS_BLOCK_PADDING];
 } block_t;
 
 typedef struct superblock_t
@@ -94,7 +107,7 @@ typedef struct superblock_t
     unsigned char empty;
     int root_inode;
     int free_block;
-    unsigned char data[SUPERBLOCK_PADDING];
+    unsigned char data[_TFS_SUPERBLOCK_PADDING];
 } superblock_t;
 
 typedef struct inodeblock_t
@@ -104,9 +117,10 @@ typedef struct inodeblock_t
     unsigned char block_address;
     unsigned char empty;
     int first_block;
+    int read_only;
     int size;
-    char filename[MAX_FILENAME_LENGTH + 1];
-    unsigned char data[INODEBLOCK_PADDING];
+    char filename[_TFS_MAX_FILENAME_LENGTH + 1];
+    unsigned char data[_TFS_INODEBLOCK_PADDING];
 } inodeblock_t;
 
 typedef struct datablock_t
@@ -116,7 +130,7 @@ typedef struct datablock_t
     unsigned char block_address;
     unsigned char empty;
     int next_block;
-    char data[EFFECTIVE_DATA_SIZE];
+    char data[_TFS_EFFECTIVE_DATA_SIZE];
 } datablock_t;
 
 typedef struct freeblock_t
@@ -126,7 +140,7 @@ typedef struct freeblock_t
     unsigned char block_address;
     unsigned char empty;
     int next_block;
-    unsigned char data[FREEBLOCK_PADDING];
+    unsigned char data[_TFS_FREEBLOCK_PADDING];
 } freeblock_t;
 
 typedef struct inode_entry_t
@@ -140,7 +154,7 @@ typedef struct file_entry_t
     int active;
     int file_descriptor;
     int inode_table_entry;
-    char filename[MAX_FILENAME_LENGTH + 1];
+    char filename[_TFS_MAX_FILENAME_LENGTH + 1];
 } file_entry_t;
 
 typedef struct mounted_disk

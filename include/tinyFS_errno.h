@@ -18,6 +18,7 @@
 #define TFS_ERR_END_OF_FILE -13      // End of file
 #define TFS_ERR_FILE_LIMIT -14       // Too many open files in system
 #define TFS_ERR_NO_SPACE -15         // No space left on device
+#define TFS_ERR_READ_ONLY -16        // Read only file
 
 extern int tfs_errno;
 
