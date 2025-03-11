@@ -153,15 +153,28 @@ int tfs_mount(char *diskname)
         return TFS_FAILURE;
     }
 
-    // get superblock
+    // validate superblock
     if (readBlock(md.disk_descriptor, 0, &md.superblock) == DSK_FAILURE)
     {
         tfs_errno = TFS_ERR_READ;
         return TFS_FAILURE;
     }
+    if (md.superblock.magic_number != _TFS_MAGIC_NUMBER || md.superblock.empty != 0 || md.superblock.type != 1)
+    {
+        tfs_errno = TFS_ERR_CORRUPTED_DISK;
+        return TFS_FAILURE;
+    }
+    if (md.superblock.free_block != 0 && (md.superblock.free_block < _TFS_MAX_INODES + 1 || md.superblock.free_block >= md.size / BLOCKSIZE))
+    {
+        tfs_errno = TFS_ERR_CORRUPTED_DISK;
+        return TFS_FAILURE;
+    }
+
+    int blocks_verified = 1;
 
     // initialize inode table
     inodeblock_t inodeblock;
+    time_t current_time = time(NULL);
     for (int i = 1; i < _TFS_MAX_INODES + 1; i++)
     {
         // get inode block
@@ -172,7 +185,7 @@ int tfs_mount(char *diskname)
         }
 
         // validate inode block
-        if (inodeblock.magic_number != md.superblock.magic_number || inodeblock.type != 2)
+        if (inodeblock.magic_number != md.superblock.magic_number || inodeblock.empty != 0 || inodeblock.type != 2)
         {
             tfs_errno = TFS_ERR_CORRUPTED_DISK;
             return TFS_FAILURE;
@@ -181,10 +194,29 @@ int tfs_mount(char *diskname)
         // check if inode is active
         if (inodeblock.first_block != 0)
         {
+            // validate active inode block
+            if (inodeblock.first_block < _TFS_MAX_INODES + 1 || inodeblock.first_block >= md.size / BLOCKSIZE)
+            {
+                tfs_errno = TFS_ERR_CORRUPTED_DISK;
+                return TFS_FAILURE;
+            }
+            if (inodeblock.created > current_time || inodeblock.modified > current_time || inodeblock.accessed > current_time)
+            {
+                tfs_errno = TFS_ERR_CORRUPTED_DISK;
+                return TFS_FAILURE;
+            }
+            if (inodeblock.created > inodeblock.modified || inodeblock.modified > inodeblock.accessed)
+            {
+                tfs_errno = TFS_ERR_CORRUPTED_DISK;
+                return TFS_FAILURE;
+            }
+
             // update inode table
             inode_table[i - 1].active = 1;
             memcpy(&inode_table[i - 1].inode, &inodeblock, sizeof(inodeblock_t));
         }
+
+        blocks_verified++;
     }
 
     // initialize file table
@@ -193,23 +225,89 @@ int tfs_mount(char *diskname)
         file_table[i].active = 0;
     }
 
-    // validate blocks
-    block_t block;
-    for (int i = _TFS_MAX_INODES + 1; i < md.size / BLOCKSIZE; i++)
+    // validate data blocks
+    inodeblock_t *inode_table_block;
+    datablock_t datablock;
+    int block_address;
+    for (int i = 0; i < _TFS_MAX_INODES; i++)
+    {
+        inode_table_block = &inode_table[i].inode;
+        block_address = inode_table_block->first_block;
+        while (block_address != 0)
+        {
+            // get data block
+            if (readBlock(md.disk_descriptor, block_address, &datablock) == DSK_FAILURE)
+            {
+                tfs_errno = TFS_ERR_READ;
+                return TFS_FAILURE;
+            }
+
+            // validate data block
+            if (datablock.magic_number != md.superblock.magic_number || datablock.empty != 0 || datablock.type != 3)
+            {
+                tfs_errno = TFS_ERR_CORRUPTED_DISK;
+                return TFS_FAILURE;
+            }
+            if (datablock.next_block != 0 && (datablock.next_block < _TFS_MAX_INODES + 1 || datablock.next_block >= md.size / BLOCKSIZE))
+            {
+                tfs_errno = TFS_ERR_CORRUPTED_DISK;
+                return TFS_FAILURE;
+            }
+
+            // update block address
+            block_address = datablock.next_block;
+
+            // check for corrupted disk
+            blocks_verified++;
+            if (blocks_verified > md.size / BLOCKSIZE)
+            {
+                tfs_errno = TFS_ERR_CORRUPTED_DISK;
+                return TFS_FAILURE;
+            }
+        }
+    }
+
+    // validate free blocks
+    freeblock_t freeblock;
+    block_address = md.superblock.free_block;
+    while (block_address != 0)
     {
         // get block
-        if (readBlock(md.disk_descriptor, i, &block) == DSK_FAILURE)
+        if (readBlock(md.disk_descriptor, block_address, &freeblock) == DSK_FAILURE)
         {
             tfs_errno = TFS_ERR_READ;
             return TFS_FAILURE;
         }
 
         // validate block
-        if (block.magic_number != md.superblock.magic_number)
+        if (freeblock.magic_number != md.superblock.magic_number || freeblock.empty != 0 || freeblock.type != 4)
         {
             tfs_errno = TFS_ERR_CORRUPTED_DISK;
             return TFS_FAILURE;
         }
+        if (freeblock.next_block != 0 && (freeblock.next_block < _TFS_MAX_INODES + 1 || freeblock.next_block >= md.size / BLOCKSIZE))
+        {
+            tfs_errno = TFS_ERR_CORRUPTED_DISK;
+            return TFS_FAILURE;
+        }
+
+        // update block address
+        block_address = freeblock.next_block;
+
+        // check for corrupted disk
+        blocks_verified++;
+        if (blocks_verified > md.size / BLOCKSIZE)
+        {
+            tfs_errno = TFS_ERR_CORRUPTED_DISK;
+            return TFS_FAILURE;
+        }
+    }
+
+    // check for corrupted disk
+    if (blocks_verified != md.size / BLOCKSIZE)
+    {
+        tfs_errno = TFS_ERR_CORRUPTED_DISK;
+        return TFS_FAILURE;
     }
 
     // mount disk
@@ -720,7 +818,7 @@ int tfs_seek(fileDescriptor FD, int offset)
 
     // validate offset
     inodeblock_t *inodeblock = &inode_table[file_table[FD].inode_table_entry].inode;
-    if (offset < 0 || offset > inodeblock->size)
+    if (offset < 0 || offset >= inodeblock->size)
     {
         tfs_errno = TFS_ERR_INVALID_ARGUMENT;
         return TFS_FAILURE;
@@ -731,6 +829,83 @@ int tfs_seek(fileDescriptor FD, int offset)
 
     tfs_errno = TFS_SUCCESS;
     return TFS_SUCCESS;
+}
+
+int tfs_rename(fileDescriptor FD, char *newName)
+{
+    // check if disk is mounted
+    if (!md.mounted)
+    {
+        tfs_errno = TFS_ERR_NO_DISK;
+        return TFS_FAILURE;
+    }
+
+    // validate file descriptor
+    if (!file_table[FD].active)
+    {
+        tfs_errno = TFS_ERR_FILE_DESCRIPTOR;
+        return TFS_FAILURE;
+    }
+
+    // validate filename
+    if (!newName || strlen(newName) > _TFS_MAX_FILENAME_LENGTH)
+    {
+        tfs_errno = TFS_ERR_INVALID_ARGUMENT;
+        return TFS_FAILURE;
+    }
+
+    // check for file in file table
+    for (int i = 0; i < _TFS_MAX_INODES; i++)
+    {
+        if (inode_table[i].active && strcmp(inode_table[i].inode.filename, newName) == 0)
+        {
+            tfs_errno = TFS_ERR_INVALID_ARGUMENT;
+            return TFS_FAILURE;
+        }
+    }
+
+    // update inode table and file table
+    inodeblock_t *inode_table_block = &inode_table[file_table[FD].inode_table_entry].inode;
+    strncpy(inode_table_block->filename, newName, _TFS_MAX_FILENAME_LENGTH + 1);
+    strncpy(file_table[FD].filename, newName, _TFS_MAX_FILENAME_LENGTH + 1);
+
+    // write inode block to disk
+    if (writeBlock(md.disk_descriptor, file_table[FD].inode_table_entry + 1, inode_table_block) == DSK_FAILURE)
+    {
+        tfs_errno = TFS_ERR_WRITE;
+        return TFS_FAILURE;
+    }
+
+    return TFS_SUCCESS;
+}
+
+void tfs_readdir()
+{
+    // check if disk is mounted
+    if (!md.mounted)
+    {
+        tfs_errno = TFS_ERR_NO_DISK;
+        return;
+    }
+
+    printf("-----------------\n");
+    printf("TinyFS Directory:\n");
+
+    int count = 0;
+    for (int i = 0; i < _TFS_MAX_INODES; i++)
+    {
+        if (inode_table[i].active)
+        {
+            printf("*  %s\n", inode_table[i].inode.filename);
+            count++;
+        }
+    }
+
+    if (count == 0)
+    {
+        printf("No files found\n");
+    }
+    printf("-----------------\n");
 }
 
 int tfs_makeRO(char *name)
@@ -984,81 +1159,4 @@ int tfs_readFileInfo(fileDescriptor FD, file_info *info)
 
     tfs_errno = TFS_SUCCESS;
     return TFS_SUCCESS;
-}
-
-int tfs_rename(fileDescriptor FD, char *filename)
-{
-    // check if disk is mounted
-    if (!md.mounted)
-    {
-        tfs_errno = TFS_ERR_NO_DISK;
-        return TFS_FAILURE;
-    }
-
-    // validate file descriptor
-    if (!file_table[FD].active)
-    {
-        tfs_errno = TFS_ERR_FILE_DESCRIPTOR;
-        return TFS_FAILURE;
-    }
-
-    // validate filename
-    if (!filename || strlen(filename) > _TFS_MAX_FILENAME_LENGTH)
-    {
-        tfs_errno = TFS_ERR_INVALID_ARGUMENT;
-        return TFS_FAILURE;
-    }
-
-    // check for file in file table
-    for (int i = 0; i < _TFS_MAX_INODES; i++)
-    {
-        if (inode_table[i].active && strcmp(inode_table[i].inode.filename, filename) == 0)
-        {
-            tfs_errno = TFS_ERR_INVALID_ARGUMENT;
-            return TFS_FAILURE;
-        }
-    }
-
-    // update inode table and file table
-    inodeblock_t *inode_table_block = &inode_table[file_table[FD].inode_table_entry].inode;
-    strncpy(inode_table_block->filename, filename, _TFS_MAX_FILENAME_LENGTH + 1);
-    strncpy(file_table[FD].filename, filename, _TFS_MAX_FILENAME_LENGTH + 1);
-
-    // write inode block to disk
-    if (writeBlock(md.disk_descriptor, file_table[FD].inode_table_entry + 1, inode_table_block) == DSK_FAILURE)
-    {
-        tfs_errno = TFS_ERR_WRITE;
-        return TFS_FAILURE;
-    }
-
-    return TFS_SUCCESS;
-}
-
-void tfs_readdir()
-{
-    // check if disk is mounted
-    if (!md.mounted)
-    {
-        tfs_errno = TFS_ERR_NO_DISK;
-        return;
-    }
-
-    printf("-----------------\n");
-    printf("TinyFS Directory:\n");
-
-    int count = 0;
-    for (int i = 0; i < _TFS_MAX_INODES; i++)
-    {
-        if (inode_table[i].active)
-        {
-            printf("*  %s\n", inode_table[i].inode.filename);
-            count++;
-        }
-    }
-
-    if (count == 0)
-    {
-        printf("No files found\n");
-    }
-    printf("-----------------\n");
 }

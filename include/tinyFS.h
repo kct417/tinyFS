@@ -164,6 +164,14 @@ int tfs_readByte(fileDescriptor FD, char *buffer);
 success/error codes.*/
 int tfs_seek(fileDescriptor FD, int offset);
 
+/* renames a file. new name should be passed in. file has to be open. */
+int tfs_rename(fileDescriptor FD, char *newName);
+
+/* lists all the files and directories on the disk, print the list to
+stdout -- Note: if you don’t have hierarchical directories, this just
+reads the root directory aka “all files” */
+void tfs_readdir();
+
 /* makes the file read only. If a file is RO, all tfs_write() and
 tfs_deleteFile() functions that try to use it fail. */
 int tfs_makeRO(char *name);
@@ -171,22 +179,11 @@ int tfs_makeRO(char *name);
 /* makes the file read-write */
 int tfs_makeRW(char *name);
 
-/* write one byte to an exact position inside the file. */
-// int tfs_writeByte(fileDescriptor FD, int offset, unsigned int data);
-
 /* uses current file pointer instead of offset) */
 int tfs_writeByte(fileDescriptor FD, unsigned int data);
 
 /* returns the file’s creation time or all info (up to you if you want to
 make multiple functions) */
 int tfs_readFileInfo(fileDescriptor FD, file_info *info);
-
-/* renames a file. new name should be passed in. file has to be open. */
-int tfs_rename(fileDescriptor FD, char *filename);
-
-/* lists all the files and directories on the disk, print the list to
-stdout -- Note: if you don’t have hierarchical directories, this just
-reads the root directory aka “all files” */
-void tfs_readdir();
 
 #endif

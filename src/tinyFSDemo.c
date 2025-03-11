@@ -7,6 +7,18 @@
 
 #define SLEEP_TIME 1
 
+void sleep_for(int seconds)
+{
+    printf("-----------------\n");
+    printf("Sleeping for %d second(s)...\n", seconds);
+    for (int i = 0; i < seconds; i++)
+    {
+        printf("%d...\n", seconds - i);
+        sleep(1);
+    }
+    printf("-----------------\n");
+}
+
 int main()
 {
     int test = 1;
