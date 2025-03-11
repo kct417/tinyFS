@@ -2,10 +2,6 @@
 #include "tinyFS.h"
 #include "tinyFS_errno.h"
 
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-
 // global variables
 static mounted_disk md = {0};
 static inode_entry_t inode_table[_TFS_MAX_INODES];
@@ -67,7 +63,18 @@ int tfs_mkfs(char *filename, int nBytes)
     inodeblock_t inodeblock;
     memset(&inodeblock, 0x00, BLOCKSIZE);
     inodeblock.type = 2;
+
+    // check superblock before assigning to inode blocks to avoid corruption
+    if (superblock.magic_number != _TFS_MAGIC_NUMBER)
+    {
+        tfs_errno = TFS_ERR_CORRUPTED_DISK;
+        return TFS_FAILURE;
+    }
     inodeblock.magic_number = superblock.magic_number;
+    inodeblock.creation_time = time(NULL);
+    inodeblock.modification_time = inodeblock.creation_time;
+    inodeblock.access_time = inodeblock.creation_time;
+
     for (int i = 1; i < _TFS_MAX_INODES + 1; i++)
     {
         if (writeBlock(md.disk_descriptor, i, &inodeblock) == TFS_FAILURE)
@@ -340,6 +347,9 @@ fileDescriptor tfs_openFile(char *name)
 
     // update inode table and file table
     inode_table[inode_table_entry].active = 1;
+    inode_table[inode_table_entry].inode.creation_time = time(NULL);                                             // set creation time
+    inode_table[inode_table_entry].inode.modification_time = inode_table[inode_table_entry].inode.creation_time; // set modification time
+    inode_table[inode_table_entry].inode.access_time = inode_table[inode_table_entry].inode.creation_time;       // set access time
     memcpy(&inode_table[inode_table_entry].inode, &inodeblock, sizeof(inodeblock_t));
 
     file_table[file_table_entry].active = 1;
@@ -463,6 +473,7 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size)
     // update inode table
     inode_table[file_table[FD].inode_table_entry].inode.size = size;
     inode_table[file_table[FD].inode_table_entry].inode.first_block = md.superblock.free_block;
+    inode_table[file_table[FD].inode_table_entry].inode.modification_time = time(NULL);  // Update modification time
 
     // write inode block to disk
     if (writeBlock(md.disk_descriptor, file_table[FD].inode_table_entry + 1, &inode_table[file_table[FD].inode_table_entry].inode) == -1)
@@ -514,6 +525,9 @@ int tfs_deleteFile(fileDescriptor FD)
     memset(&inodeblock, 0x00, BLOCKSIZE);
     inodeblock.type = 2;
     inodeblock.magic_number = md.superblock.magic_number;
+    inodeblock.creation_time = time(NULL);      // Reset creation time
+    inodeblock.modification_time = time(NULL);  // Reset modification time
+    inodeblock.access_time = time(NULL);        // Reset access time
 
     // write inode block to disk
     if (writeBlock(md.disk_descriptor, file_table[FD].inode_table_entry + 1, &inodeblock) == -1)
@@ -632,6 +646,9 @@ int tfs_readByte(fileDescriptor FD, char *buffer)
     *buffer = datablock.data[data_offset];
     file_table[FD].file_descriptor++;
 
+    // update access time
+    inode_table[file_table[FD].inode_table_entry].inode.access_time = time(NULL);
+
     tfs_errno = TFS_SUCCESS;
     return TFS_SUCCESS;
 }
@@ -657,6 +674,9 @@ int tfs_seek(fileDescriptor FD, int offset)
 
     // set file pointer to offset
     file_table[FD].file_descriptor = offset;
+
+    // update access time
+    inode_table[file_table[FD].inode_table_entry].inode.access_time = time(NULL);
 
     tfs_errno = TFS_SUCCESS;
     return TFS_SUCCESS;
@@ -905,6 +925,138 @@ int tfs_writeByte(fileDescriptor FD, unsigned int data)
     {
         tfs_errno = TFS_ERR_WRITE;
         return TFS_FAILURE;
+    }
+
+    tfs_errno = TFS_SUCCESS;
+    return TFS_SUCCESS;
+}
+
+int tfs_readFileInfo(fileDescriptor FD, fileStat *stats)
+{
+    // check if disk is mounted
+    if (!md.mounted)
+    {
+        tfs_errno = TFS_ERR_NO_DISK;
+        return TFS_FAILURE;
+    }
+
+    // validate file descriptor
+    if (!file_table[FD].active)
+    {
+        tfs_errno = TFS_ERR_FILE_DESCRIPTOR;
+        return TFS_FAILURE;
+    }
+
+    // get inode block
+    inodeblock_t *inodeblock = &inode_table[file_table[FD].inode_table_entry].inode;
+
+    // set file stats
+    stats->filename = inodeblock->filename;
+    stats->size = inodeblock->size;
+    stats->creation_time = inodeblock->creation_time;
+    stats->modification_time = inodeblock->modification_time;
+    stats->access_time = inodeblock->access_time;
+    stats->read_only = inodeblock->read_only;
+
+    tfs_errno = TFS_SUCCESS;
+    return TFS_SUCCESS;
+}
+
+int tfs_displayFragments()
+{
+    // check if disk is mounted
+    if (!md.mounted)
+    {
+        tfs_errno = TFS_ERR_NO_DISK;
+        return TFS_FAILURE;
+    }
+
+    // display fragments
+    datablock_t datablock;
+    int block_number = md.superblock.free_block;
+    int fragments = 0;
+    while (block_number != 0)
+    {
+        // get data block
+        if (readBlock(md.disk_descriptor, block_number, &datablock) == -1)
+        {
+            tfs_errno = TFS_ERR_READ;
+            return TFS_FAILURE;
+        }
+
+        // check for free block
+        if (datablock.type != 4)
+        {
+            tfs_errno = TFS_ERR_CORRUPTED_DISK;
+            return TFS_FAILURE;
+        }
+
+        // set next block
+        block_number = datablock.next_block;
+        fragments++;
+    }
+
+    tfs_errno = TFS_SUCCESS;
+    return fragments;
+}
+
+int tfs_defrag()
+{
+    // check if disk is mounted
+    if (!md.mounted)
+    {
+        tfs_errno = TFS_ERR_NO_DISK;
+        return TFS_FAILURE;
+    }
+
+    // defragment disk
+    datablock_t datablock;
+    freeblock_t freeblock;
+    memset(&freeblock, 0x00, BLOCKSIZE);
+    freeblock.type = 4;
+    freeblock.magic_number = md.superblock.magic_number;
+    int block_number = md.superblock.free_block;
+    int current_block = 0;
+    int total_blocks = md.size / BLOCKSIZE;
+    for (int i = 0; i < total_blocks; i++)
+    {
+        // get data block
+        if (readBlock(md.disk_descriptor, block_number, &datablock) == -1)
+        {
+            tfs_errno = TFS_ERR_READ;
+            return TFS_FAILURE;
+        }
+
+        // check for free block
+        if (datablock.type == 4)
+        {
+            // set free block to superblock free block
+            freeblock.next_block = md.superblock.free_block;
+            // set superblock free block to current block
+            md.superblock.free_block = current_block;
+
+            // write free block to disk
+            if (writeBlock(md.disk_descriptor, block_number, &freeblock) == -1)
+            {
+                tfs_errno = TFS_ERR_WRITE;
+                return TFS_FAILURE;
+            }
+
+            // write superblock to disk
+            if (writeBlock(md.disk_descriptor, 0, &md.superblock) == -1)
+            {
+                tfs_errno = TFS_ERR_WRITE;
+                return TFS_FAILURE;
+            }
+        }
+        else
+        {
+            // set next block
+            current_block++;
+        }
+
+        // set next block
+        block_number = datablock.next_block;
     }
 
     tfs_errno = TFS_SUCCESS;

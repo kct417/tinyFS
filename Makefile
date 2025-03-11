@@ -32,6 +32,10 @@ all: $(PROG)
 libs: $(LIBS)
 tests: $(TESTS)
 
+# Ensure obj directory exists
+$(ODIR):
+	mkdir -p $(ODIR)
+
 # Program
 tinyFSDemo: $(ODIR)/tinyFSDemo.o $(LDIR)/libTinyFS.a
 	$(CC) $(CFLAGS) -o $@ $< -L$(LDIR) -lTinyFS
@@ -51,20 +55,20 @@ tfsTest: $(ODIR)/tfsTest.o $(LDIR)/libTinyFS.a
 	$(CC) $(CFLAGS) -o tfsTest $< -L$(LDIR) -lTinyFS
 
 # Program Object Files
-$(ODIR)/tinyFSDemo.o: $(SDIR)/tinyFSDemo.c
+$(ODIR)/tinyFSDemo.o: $(SDIR)/tinyFSDemo.c | $(ODIR)
 	$(CC) $(CFLAGS) -c -o $@ $^
 
-$(ODIR)/tinyFS.o: $(SDIR)/tinyFS.c $(ODIR)/disk.o
+$(ODIR)/tinyFS.o: $(SDIR)/tinyFS.c | $(ODIR)
 	$(CC) $(CFLAGS) -c -o $@ $^
 
-$(ODIR)/disk.o: $(SDIR)/disk.c
+$(ODIR)/disk.o: $(SDIR)/disk.c | $(ODIR)
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 # Test Program Object Files
-$(ODIR)/diskTest.o: $(TDIR)/diskTest.c
+$(ODIR)/diskTest.o: $(TDIR)/diskTest.c | $(ODIR)
 	$(CC) $(CFLAGS) -c -o $@ $^
 
-$(ODIR)/tfsTest.o: $(TDIR)/tfsTest.c
+$(ODIR)/tfsTest.o: $(TDIR)/tfsTest.c | $(ODIR)
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 # Clean

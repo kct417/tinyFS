@@ -1,6 +1,11 @@
 #ifndef _TINYFS_H
 #define _TINYFS_H
 
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <time.h>   // for timestamps
+
 /* The default size of the disk and file system block */
 #define BLOCKSIZE 256
 
@@ -75,6 +80,21 @@ int tfs_makeRW(char *name);
 /* uses current file pointer instead of offset) */
 int tfs_writeByte(fileDescriptor FD, unsigned int data);
 
+/* TIMESTAMPS */
+/* Retrieves file information such as size, creation time, and modification
+time and places it where stats points to */
+int tfs_readFileInfo(fileDescriptor FD, fileStat *stats);
+
+/* DEFRAG */
+/* this function allows the user to see a map of all blocks with the non-free
+blocks clearly designated. You can return this as a linked list or a bit map
+which you can use to display the map with */
+int tfs_displayFragments();
+
+/* moves blocks such that all free blocks are contiguous at the end of the
+disk. This should be verifiable with the tfs_displayFraments() function */
+int tfs_defrag();
+
 // internal definitions
 #define _TFS_MAGIC_NUMBER 0x44
 
@@ -116,10 +136,18 @@ typedef struct inodeblock_t
     unsigned char magic_number;
     unsigned char block_address;
     unsigned char empty;
+
     int first_block;
     int read_only;
     int size;
+
     char filename[_TFS_MAX_FILENAME_LENGTH + 1];
+
+    // timestamps
+    time_t creation_time;
+    time_t modification_time;
+    time_t access_time;
+
     unsigned char data[_TFS_INODEBLOCK_PADDING];
 } inodeblock_t;
 
@@ -164,5 +192,16 @@ typedef struct mounted_disk
     int disk_descriptor;
     superblock_t superblock;
 } mounted_disk;
+
+typedef struct fileStat
+{
+    char *filename;
+    int size;
+    time_t creation_time;
+    time_t modification_time;
+    time_t access_time;
+    int read_only;
+} fileStat;
+
 
 #endif
