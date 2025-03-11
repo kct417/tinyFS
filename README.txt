@@ -7,30 +7,18 @@ Names:
     Casey Tran
 
 Implementation:
+    tinyFS is implemented with a linked list to store data. NOTE: WRITE IMPLEMENTATION HERE
+        - tfs_mkfs() - Create a filesystem 
+        - tfs_mount() - Mount the filesystem 
+        - tfs_unmount() - Unmount the filesystem 
+        - tfs_openFile() - Open a file 
+        - tfs_closeFile() - Close a file 
+        - tfs_writeFile() - Write full content to a file 
+        - tfs_deleteFile() - Delete a file 
+        - tfs_readByte() - Read a byte 
+        - tfs_seek() - Move the file pointer 
 
 Additional Functionality:
-
-Limitations:
-
-Testing:
-
-- TinyFSDemo.c is our test file to test our tinyFS functionality.  
-  It validates the core functionality (Phase 1 + 2 - 70%) and additional features
-
-- Base Implementation Phase 1+2 (70%)
-
-    tfs_mkfs() - Create a filesystem 
-    tfs_mount() - Mount the filesystem 
-    tfs_unmount() - Unmount the filesystem 
-    tfs_openFile() - Open a file 
-    tfs_closeFile() - Close a file 
-    tfs_writeFile() - Write full content to a file 
-    tfs_deleteFile() - Delete a file 
-    tfs_readByte() - Read a byte 
-    tfs_seek() - Move the file pointer 
-
-- Additional Features
-
     - Fragmentation info and defragmentation (10%)
         - tfs_displayFragments() - Shows a map of all blocks with the non-free blocks clearly designated.
         - tfs_defrag() - Moves blocks such that all free blocks are contiguous at the end of the disk.
@@ -74,3 +62,5 @@ Testing:
             - Empty byte
             - Type
             - Next free block
+
+Limitations:

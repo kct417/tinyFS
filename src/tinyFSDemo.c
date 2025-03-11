@@ -26,7 +26,6 @@ int main()
     char *filename;
     char *content;
     char buffer;
-    file_info info;
 
     // create disk with default size
     if (tfs_mkfs(DEFAULT_DISK_NAME, DEFAULT_DISK_SIZE) == TFS_FAILURE)
@@ -67,14 +66,11 @@ int main()
     printf("[TEST %d] : Opened %s\n", test++, filename);
 
     // get file1 times
-    if (tfs_readFileInfo(fd1, &info) == TFS_FAILURE)
+    if (tfs_readFileInfo(fd1) == TFS_FAILURE)
     {
         fprintf(stderr, "Failed to get times for %s\n", filename);
         return 1;
     }
-    printf("Time Created: %s\n", info.created);
-    printf("Time Modified: %s\n", info.modified);
-    printf("Time Accessed: %s\n", info.accessed);
     printf("[TEST %d] : Got times for file1\n", test++);
 
     printf("Sleeping for %d second(s)...\n", SLEEP_TIME);
@@ -95,14 +91,11 @@ int main()
     printf("[TEST %d] : Opened %s\n", test++, filename);
 
     // get file2 times
-    if (tfs_readFileInfo(fd2, &info) == TFS_FAILURE)
+    if (tfs_readFileInfo(fd2) == TFS_FAILURE)
     {
         fprintf(stderr, "Failed to get times for %s\n", filename);
         return 1;
     }
-    printf("Time Created: %s\n", info.created);
-    printf("Time Modified: %s\n", info.modified);
-    printf("Time Accessed: %s\n", info.accessed);
     printf("[TEST %d] : Got times for file2\n", test++);
 
     printf("Sleeping for %d second(s)...\n", SLEEP_TIME);
@@ -186,14 +179,11 @@ int main()
 
     // get file3 times
     filename = "file3";
-    if (tfs_readFileInfo(fd2, &info) == TFS_FAILURE)
+    if (tfs_readFileInfo(fd2) == TFS_FAILURE)
     {
         fprintf(stderr, "Failed to get times for %s\n", filename);
         return 1;
     }
-    printf("Time Created: %s\n", info.created);
-    printf("Time Modified: %s\n", info.modified);
-    printf("Time Accessed: %s\n", info.accessed);
     printf("[TEST %d] : Got times for file3\n", test++);
 
     // write to file1
@@ -206,14 +196,11 @@ int main()
     printf("[TEST %d] : Wrote to file1\n", test++);
 
     // get file1 times
-    if (tfs_readFileInfo(fd1, &info) == TFS_FAILURE)
+    if (tfs_readFileInfo(fd1) == TFS_FAILURE)
     {
         fprintf(stderr, "Failed to get times for %s\n", filename);
         return 1;
     }
-    printf("Time Created: %s\n", info.created);
-    printf("Time Modified: %s\n", info.modified);
-    printf("Time Accessed: %s\n", info.accessed);
     printf("[TEST %d] : Got times for file1\n", test++);
 
     printf("Sleeping for %d second(s)...\n", SLEEP_TIME);
@@ -233,14 +220,11 @@ int main()
     printf("[TEST %d] : Wrote to file3\n", test++);
 
     // get file3 times
-    if (tfs_readFileInfo(fd2, &info) == TFS_FAILURE)
+    if (tfs_readFileInfo(fd2) == TFS_FAILURE)
     {
         fprintf(stderr, "Failed to get times for %s\n", filename);
         return 1;
     }
-    printf("Time Created: %s\n", info.created);
-    printf("Time Modified: %s\n", info.modified);
-    printf("Time Accessed: %s\n", info.accessed);
     printf("[TEST %d] : Got times for file3\n", test++);
 
     printf("Sleeping for %d second(s)...\n", SLEEP_TIME);
@@ -258,14 +242,11 @@ int main()
     printf("[TEST %d] : Read from file1\n", test++);
 
     // get file1 times
-    if (tfs_readFileInfo(fd1, &info) == TFS_FAILURE)
+    if (tfs_readFileInfo(fd1) == TFS_FAILURE)
     {
         fprintf(stderr, "Failed to get times for %s\n", filename);
         return 1;
     }
-    printf("Time Created: %s\n", info.created);
-    printf("Time Modified: %s\n", info.modified);
-    printf("Time Accessed: %s\n", info.accessed);
     printf("[TEST %d] : Got times for file1\n", test++);
 
     // read from file3
@@ -276,14 +257,11 @@ int main()
     printf("[TEST %d] : Read from file3\n", test++);
 
     // get file3 times
-    if (tfs_readFileInfo(fd2, &info) == TFS_FAILURE)
+    if (tfs_readFileInfo(fd2) == TFS_FAILURE)
     {
         fprintf(stderr, "Failed to get times for %s\n", filename);
         return 1;
     }
-    printf("Time Created: %s\n", info.created);
-    printf("Time Modified: %s\n", info.modified);
-    printf("Time Accessed: %s\n", info.accessed);
     printf("[TEST %d] : Got times for file3\n", test++);
 
     printf("Sleeping for %d second(s)...\n", SLEEP_TIME);
@@ -302,14 +280,11 @@ int main()
     printf("[TEST %d] : Read from file1 failed as expected\n", test++);
 
     // get file1 times
-    if (tfs_readFileInfo(fd1, &info) == TFS_FAILURE)
+    if (tfs_readFileInfo(fd1) == TFS_FAILURE)
     {
         fprintf(stderr, "Failed to get times for %s\n", filename);
         return 1;
     }
-    printf("Time Created: %s\n", info.created);
-    printf("Time Modified: %s\n", info.modified);
-    printf("Time Accessed: %s\n", info.accessed);
     printf("[TEST %d] : Got times for file1\n", test++);
 
     // read from file1 again
@@ -325,14 +300,11 @@ int main()
     printf("[TEST %d] : Read from file1 again\n", test++);
 
     // get file1 times
-    if (tfs_readFileInfo(fd1, &info) == TFS_FAILURE)
+    if (tfs_readFileInfo(fd1) == TFS_FAILURE)
     {
         fprintf(stderr, "Failed to get times for %s\n", filename);
         return 1;
     }
-    printf("Time Created: %s\n", info.created);
-    printf("Time Modified: %s\n", info.modified);
-    printf("Time Accessed: %s\n", info.accessed);
     printf("[TEST %d] : Got times for file1\n", test++);
 
     // close file1
@@ -368,14 +340,11 @@ int main()
     printf("[TEST %d] : Opened file1 again\n", test++);
 
     // get file1 times
-    if (tfs_readFileInfo(fd1, &info) == TFS_FAILURE)
+    if (tfs_readFileInfo(fd1) == TFS_FAILURE)
     {
         fprintf(stderr, "Failed to get times for %s\n", filename);
         return 1;
     }
-    printf("Time Created: %s\n", info.created);
-    printf("Time Modified: %s\n", info.modified);
-    printf("Time Accessed: %s\n", info.accessed);
     printf("[TEST %d] : Got times for file1\n", test++);
 
     // delete file1
@@ -425,14 +394,11 @@ int main()
     printf("[TEST %d] : Write to file2 failed as expected\n", test++);
 
     // get file2 times
-    if (tfs_readFileInfo(fd2, &info) == TFS_FAILURE)
+    if (tfs_readFileInfo(fd2) == TFS_FAILURE)
     {
         fprintf(stderr, "Failed to get times for %s\n", filename);
         return 1;
     }
-    printf("Time Created: %s\n", info.created);
-    printf("Time Modified: %s\n", info.modified);
-    printf("Time Accessed: %s\n", info.accessed);
     printf("[TEST %d] : Got times for file2\n", test++);
 
     // attempt to delete file2
@@ -444,14 +410,11 @@ int main()
     printf("[TEST %d] : Delete file2 failed as expected\n", test++);
 
     // get file2 times
-    if (tfs_readFileInfo(fd2, &info) == TFS_FAILURE)
+    if (tfs_readFileInfo(fd2) == TFS_FAILURE)
     {
         fprintf(stderr, "Failed to get times for %s\n", filename);
         return 1;
     }
-    printf("Time Created: %s\n", info.created);
-    printf("Time Modified: %s\n", info.modified);
-    printf("Time Accessed: %s\n", info.accessed);
     printf("[TEST %d] : Got times for file2\n", test++);
 
     // set file2 to read write
@@ -479,14 +442,11 @@ int main()
     printf("[TEST %d] : Wrote to %s\n", test++, filename);
 
     // get file2 times
-    if (tfs_readFileInfo(fd2, &info) == TFS_FAILURE)
+    if (tfs_readFileInfo(fd2) == TFS_FAILURE)
     {
         fprintf(stderr, "Failed to get times for %s\n", filename);
         return 1;
     }
-    printf("Time Created: %s\n", info.created);
-    printf("Time Modified: %s\n", info.modified);
-    printf("Time Accessed: %s\n", info.accessed);
     printf("[TEST %d] : Got times for file2\n", test++);
 
     printf("Sleeping for %d second(s)...\n", SLEEP_TIME);
@@ -504,14 +464,11 @@ int main()
     printf("[TEST %d] : Read from file2\n", test++);
 
     // get file2 times
-    if (tfs_readFileInfo(fd2, &info) == TFS_FAILURE)
+    if (tfs_readFileInfo(fd2) == TFS_FAILURE)
     {
         fprintf(stderr, "Failed to get times for %s\n", filename);
         return 1;
     }
-    printf("Time Created: %s\n", info.created);
-    printf("Time Modified: %s\n", info.modified);
-    printf("Time Accessed: %s\n", info.accessed);
     printf("[TEST %d] : Got times for file2\n", test++);
 
     printf("Sleeping for %d second(s)...\n", SLEEP_TIME);
@@ -536,14 +493,11 @@ int main()
     printf("[TEST %d] : Wrote byte to file2\n", test++);
 
     // get file2 times
-    if (tfs_readFileInfo(fd2, &info) == TFS_FAILURE)
+    if (tfs_readFileInfo(fd2) == TFS_FAILURE)
     {
         fprintf(stderr, "Failed to get times for %s\n", filename);
         return 1;
     }
-    printf("Time Created: %s\n", info.created);
-    printf("Time Modified: %s\n", info.modified);
-    printf("Time Accessed: %s\n", info.accessed);
     printf("[TEST %d] : Got times for file2\n", test++);
 
     printf("Sleeping for %d second(s)...\n", SLEEP_TIME);
@@ -566,14 +520,11 @@ int main()
     printf("[TEST %d] : Read from file2 again\n", test++);
 
     // get file2 times
-    if (tfs_readFileInfo(fd2, &info) == TFS_FAILURE)
+    if (tfs_readFileInfo(fd2) == TFS_FAILURE)
     {
         fprintf(stderr, "Failed to get times for %s\n", filename);
         return 1;
     }
-    printf("Time Created: %s\n", info.created);
-    printf("Time Modified: %s\n", info.modified);
-    printf("Time Accessed: %s\n", info.accessed);
     printf("[TEST %d] : Got times for file2\n", test++);
 
     // delete file2

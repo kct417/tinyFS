@@ -64,7 +64,6 @@ $(ODIR)/tinyFSDemo1.o: $(SDIR)/tinyFSDemo1.c
 	@mkdir -p $(ODIR)
 	$(CC) $(CFLAGS) -c -o $@ $^
 
-
 $(ODIR)/tinyFS.o: $(SDIR)/tinyFS.c $(ODIR)/disk.o
 	@mkdir -p $(ODIR)
 	$(CC) $(CFLAGS) -c -o $@ $^

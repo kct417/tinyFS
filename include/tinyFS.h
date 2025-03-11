@@ -110,13 +110,6 @@ typedef struct mounted_disk
     superblock_t superblock;
 } mounted_disk;
 
-typedef struct file_info
-{
-    char created[22];
-    char modified[22];
-    char accessed[22];
-} file_info;
-
 /* Makes a blank TinyFS file system of size nBytes on the unix file
 specified by ‘filename’. This function should use the emulated disk
 library to open the specified unix file, and upon success, format the
@@ -164,6 +157,16 @@ int tfs_readByte(fileDescriptor FD, char *buffer);
 success/error codes.*/
 int tfs_seek(fileDescriptor FD, int offset);
 
+/* this function allows the user to see a map of all blocks with the
+non-free blocks clearly designated. You can return this as a linked list
+or a bit map which you can use to display the map with */
+int tfs_displayFragments();
+
+/* moves blocks such that all free blocks are contiguous at the end of
+the disk. This should be verifiable with the tfs_displayFraments()
+function */
+int tfs_defrag();
+
 /* renames a file. new name should be passed in. file has to be open. */
 int tfs_rename(fileDescriptor FD, char *newName);
 
@@ -184,6 +187,6 @@ int tfs_writeByte(fileDescriptor FD, unsigned int data);
 
 /* returns the file’s creation time or all info (up to you if you want to
 make multiple functions) */
-int tfs_readFileInfo(fileDescriptor FD, file_info *info);
+int tfs_readFileInfo(fileDescriptor FD);
 
 #endif

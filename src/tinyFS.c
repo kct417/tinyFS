@@ -831,6 +831,18 @@ int tfs_seek(fileDescriptor FD, int offset)
     return TFS_SUCCESS;
 }
 
+int tfs_displayFragments()
+{
+    tfs_errno = TFS_SUCCESS;
+    return TFS_SUCCESS;
+}
+
+int tfs_defrag()
+{
+    tfs_errno = TFS_SUCCESS;
+    return TFS_SUCCESS;
+}
+
 int tfs_rename(fileDescriptor FD, char *newName)
 {
     // check if disk is mounted
@@ -1129,7 +1141,7 @@ int tfs_writeByte(fileDescriptor FD, unsigned int data)
     return TFS_SUCCESS;
 }
 
-int tfs_readFileInfo(fileDescriptor FD, file_info *info)
+int tfs_readFileInfo(fileDescriptor FD)
 {
     // check if disk is mounted
     if (!md.mounted)
@@ -1147,15 +1159,21 @@ int tfs_readFileInfo(fileDescriptor FD, file_info *info)
 
     // get inode block
     inodeblock_t *inodeblock = &inode_table[file_table[FD].inode_table_entry].inode;
-
-    // Format the time into a string
     struct tm *time_info;
+    char buffer[22];
+
+    printf("-----------------\n");
+    printf("Timestamp Information:\n");
     time_info = localtime(&inodeblock->created);
-    strftime(info->created, sizeof(char) * 22, "[%m-%d-%Y %H:%M:%S]", time_info);
+    strftime(buffer, sizeof(char) * 22, "[%m-%d-%Y %H:%M:%S]", time_info);
+    printf("Created: %s\n", buffer);
     time_info = localtime(&inodeblock->modified);
-    strftime(info->modified, sizeof(char) * 22, "[%m-%d-%Y %H:%M:%S]", time_info);
+    strftime(buffer, sizeof(char) * 22, "[%m-%d-%Y %H:%M:%S]", time_info);
+    printf("Modified: %s\n", buffer);
     time_info = localtime(&inodeblock->accessed);
-    strftime(info->accessed, sizeof(char) * 22, "[%m-%d-%Y %H:%M:%S]", time_info);
+    strftime(buffer, sizeof(char) * 22, "[%m-%d-%Y %H:%M:%S]", time_info);
+    printf("Accessed: %s\n", buffer);
+    printf("-----------------\n");
 
     tfs_errno = TFS_SUCCESS;
     return TFS_SUCCESS;
