@@ -1,6 +1,8 @@
 #ifndef _TINYFS_H
 #define _TINYFS_H
 
+#include <time.h>
+
 /* The default size of the disk and file system block */
 #define BLOCKSIZE 256
 
@@ -14,6 +16,106 @@ possible values */
 
 /* use as a special type to keep track of files */
 typedef int fileDescriptor;
+
+// internal definitions
+#define _TFS_MAGIC_NUMBER 0x44
+
+#define _TFS_MAX_FILENAME_LENGTH 8
+#define _TFS_MAX_INODES 8
+
+#define _TFS_BLOCK_PADDING (BLOCKSIZE - sizeof(unsigned char) * 4 - sizeof(int))
+#define _TFS_SUPERBLOCK_PADDING (BLOCKSIZE - sizeof(unsigned char) * 4 - sizeof(int) * 2)
+#define _TFS_INODEBLOCK_PADDING (BLOCKSIZE - sizeof(unsigned char) * 4 - sizeof(int) * 3 - sizeof(time_t) * 3 - _TFS_MAX_FILENAME_LENGTH - 1)
+#define _TFS_FREEBLOCK_PADDING (BLOCKSIZE - sizeof(unsigned char) * 4 - sizeof(int))
+
+#define _TFS_EFFECTIVE_DATA_SIZE (BLOCKSIZE - sizeof(unsigned char) * 4 - sizeof(int))
+
+// type definitions
+typedef struct block_t
+{
+    unsigned char type;
+    unsigned char magic_number;
+    unsigned char block_address;
+    unsigned char empty;
+    int next_block;
+    unsigned char data[_TFS_BLOCK_PADDING];
+} block_t;
+
+typedef struct superblock_t
+{
+    unsigned char type;
+    unsigned char magic_number;
+    unsigned char block_address;
+    unsigned char empty;
+    int root_inode;
+    int free_block;
+    unsigned char data[_TFS_SUPERBLOCK_PADDING];
+} superblock_t;
+
+typedef struct inodeblock_t
+{
+    unsigned char type;
+    unsigned char magic_number;
+    unsigned char block_address;
+    unsigned char empty;
+    int first_block;
+    int read_only;
+    int size;
+    time_t created;
+    time_t modified;
+    time_t accessed;
+    char filename[_TFS_MAX_FILENAME_LENGTH + 1];
+    unsigned char data[_TFS_INODEBLOCK_PADDING];
+} inodeblock_t;
+
+typedef struct datablock_t
+{
+    unsigned char type;
+    unsigned char magic_number;
+    unsigned char block_address;
+    unsigned char empty;
+    int next_block;
+    char data[_TFS_EFFECTIVE_DATA_SIZE];
+} datablock_t;
+
+typedef struct freeblock_t
+{
+    unsigned char type;
+    unsigned char magic_number;
+    unsigned char block_address;
+    unsigned char empty;
+    int next_block;
+    unsigned char data[_TFS_FREEBLOCK_PADDING];
+} freeblock_t;
+
+typedef struct inode_entry_t
+{
+    int active;
+    inodeblock_t inode;
+} inode_entry_t;
+
+typedef struct file_entry_t
+{
+    int active;
+    int file_descriptor;
+    int inode_table_entry;
+    char filename[_TFS_MAX_FILENAME_LENGTH + 1];
+} file_entry_t;
+
+typedef struct mounted_disk
+{
+    int mounted;
+    int size;
+    int disk_descriptor;
+    superblock_t superblock;
+} mounted_disk;
+
+typedef struct file_info
+{
+    char created[22];
+    char modified[22];
+    char accessed[22];
+} file_info;
 
 /* Makes a blank TinyFS file system of size nBytes on the unix file
 specified by ‘filename’. This function should use the emulated disk
@@ -74,102 +176,17 @@ int tfs_makeRW(char *name);
 
 /* uses current file pointer instead of offset) */
 int tfs_writeByte(fileDescriptor FD, unsigned int data);
-/* renames a file. new name should be passed in. 
-file has to be open. */
-int tfs_rename(fileDescriptor FD, char* newName); 
 
-/* lists all the files and directories on the disk, print the
-list to stdout */
+/* returns the file’s creation time or all info (up to you if you want to
+make multiple functions) */
+int tfs_readFileInfo(fileDescriptor FD, file_info *info);
+
+/* renames a file. new name should be passed in. file has to be open. */
+int tfs_rename(fileDescriptor FD, char *newName);
+
+/* lists all the files and directories on the disk, print the list to
+stdout -- Note: if you don’t have hierarchical directories, this just
+reads the root directory aka “all files” */
 void tfs_readdir();
-
-// internal definitions
-#define _TFS_MAGIC_NUMBER 0x44
-
-#define _TFS_MAX_FILENAME_LENGTH 8
-#define _TFS_MAX_INODES 8
-
-#define _TFS_BLOCK_PADDING (BLOCKSIZE - sizeof(unsigned char) * 4 - sizeof(int))
-#define _TFS_SUPERBLOCK_PADDING (BLOCKSIZE - sizeof(unsigned char) * 4 - sizeof(int) * 2)
-#define _TFS_INODEBLOCK_PADDING (BLOCKSIZE - sizeof(unsigned char) * 4 - sizeof(int) * 3 - _TFS_MAX_FILENAME_LENGTH - 1)
-#define _TFS_FREEBLOCK_PADDING (BLOCKSIZE - sizeof(unsigned char) * 4 - sizeof(int))
-
-#define _TFS_EFFECTIVE_DATA_SIZE (BLOCKSIZE - sizeof(unsigned char) * 4 - sizeof(int))
-
-// type definitions
-typedef struct block_t
-{
-    unsigned char type;
-    unsigned char magic_number;
-    unsigned char block_address;
-    unsigned char empty;
-    int next_block;
-    unsigned char data[_TFS_BLOCK_PADDING];
-} block_t;
-
-typedef struct superblock_t
-{
-    unsigned char type;
-    unsigned char magic_number;
-    unsigned char block_address;
-    unsigned char empty;
-    int root_inode;
-    int free_block;
-    unsigned char data[_TFS_SUPERBLOCK_PADDING];
-} superblock_t;
-
-typedef struct inodeblock_t
-{
-    unsigned char type;
-    unsigned char magic_number;
-    unsigned char block_address;
-    unsigned char empty;
-    int first_block;
-    int read_only;
-    int size;
-    char filename[_TFS_MAX_FILENAME_LENGTH + 1];
-    unsigned char data[_TFS_INODEBLOCK_PADDING];
-} inodeblock_t;
-
-typedef struct datablock_t
-{
-    unsigned char type;
-    unsigned char magic_number;
-    unsigned char block_address;
-    unsigned char empty;
-    int next_block;
-    char data[_TFS_EFFECTIVE_DATA_SIZE];
-} datablock_t;
-
-typedef struct freeblock_t
-{
-    unsigned char type;
-    unsigned char magic_number;
-    unsigned char block_address;
-    unsigned char empty;
-    int next_block;
-    unsigned char data[_TFS_FREEBLOCK_PADDING];
-} freeblock_t;
-
-typedef struct inode_entry_t
-{
-    int active;
-    inodeblock_t inode;
-} inode_entry_t;
-
-typedef struct file_entry_t
-{
-    int active;
-    int file_descriptor;
-    int inode_table_entry;
-    char filename[_TFS_MAX_FILENAME_LENGTH + 1];
-} file_entry_t;
-
-typedef struct mounted_disk
-{
-    int mounted;
-    int size;
-    int disk_descriptor;
-    superblock_t superblock;
-} mounted_disk;
 
 #endif

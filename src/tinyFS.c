@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 
 // global variables
 static mounted_disk md = {0};
@@ -50,24 +51,28 @@ int tfs_mkfs(char *filename, int nBytes)
         return TFS_FAILURE;
     }
 
-    // write superblock to disk
+    // create superblock
     superblock_t superblock;
     memset(&superblock, 0x00, BLOCKSIZE);
     superblock.type = 1;
     superblock.magic_number = _TFS_MAGIC_NUMBER;
     superblock.root_inode = 1;
     superblock.free_block = _TFS_MAX_INODES + 1;
+
+    // write superblock to disk
     if (writeBlock(md.disk_descriptor, 0, &superblock) == TFS_FAILURE)
     {
         tfs_errno = TFS_ERR_WRITE;
         return TFS_FAILURE;
     }
 
-    // write inode blocks to disk
+    // create inode block
     inodeblock_t inodeblock;
     memset(&inodeblock, 0x00, BLOCKSIZE);
     inodeblock.type = 2;
     inodeblock.magic_number = superblock.magic_number;
+
+    // write inode blocks to disk
     for (int i = 1; i < _TFS_MAX_INODES + 1; i++)
     {
         if (writeBlock(md.disk_descriptor, i, &inodeblock) == TFS_FAILURE)
@@ -77,11 +82,13 @@ int tfs_mkfs(char *filename, int nBytes)
         }
     }
 
-    // write free blocks to disk
+    // create free block
     freeblock_t freeblock;
     memset(&freeblock, 0x00, BLOCKSIZE);
     freeblock.type = 4;
     freeblock.magic_number = superblock.magic_number;
+
+    // write free blocks to disk
     for (int i = _TFS_MAX_INODES + 1; i < nBytes / BLOCKSIZE; i++)
     {
         // set linked list of free blocks
@@ -251,10 +258,28 @@ fileDescriptor tfs_openFile(char *name)
     }
 
     // check for file in file table
+    time_t curtime;
+    time_t old_time;
+    inodeblock_t *inode_table_block;
     for (int i = 0; i < _TFS_MAX_INODES; i++)
     {
         if (file_table[i].active && strcmp(file_table[i].filename, name) == 0)
         {
+            // update inode table
+            inode_table_block = &inode_table[file_table[i].inode_table_entry].inode;
+            old_time = inode_table_block->accessed;
+            time(&curtime);
+            inode_table_block->accessed = curtime;
+
+            // write inode block to disk
+            if (writeBlock(md.disk_descriptor, file_table[i].inode_table_entry + 1, inode_table_block) == -1)
+            {
+                // revert time accessed
+                inode_table_block->accessed = old_time;
+                tfs_errno = TFS_ERR_WRITE;
+                return TFS_FAILURE;
+            }
+
             tfs_errno = TFS_SUCCESS;
             return i;
         }
@@ -266,7 +291,8 @@ fileDescriptor tfs_openFile(char *name)
     int file_table_entry = -1;
     for (int i = 0; i < _TFS_MAX_INODES; i++)
     {
-        if (inode_table[i].active && strcmp(inode_table[i].inode.filename, name) == 0)
+        inode_table_block = &inode_table[i].inode;
+        if (inode_table[i].active && strcmp(inode_table_block->filename, name) == 0)
         {
             // find free file entry
             for (int j = 0; j < _TFS_MAX_INODES; j++)
@@ -280,6 +306,20 @@ fileDescriptor tfs_openFile(char *name)
             if (file_table_entry == -1)
             {
                 tfs_errno = TFS_ERR_NO_SPACE;
+                return TFS_FAILURE;
+            }
+
+            // update inode table
+            old_time = inode_table_block->accessed;
+            time(&curtime);
+            inode_table_block->accessed = curtime;
+
+            // write inode block to disk
+            if (writeBlock(md.disk_descriptor, i + 1, inode_table_block) == -1)
+            {
+                // revert time accessed
+                inode_table[i].inode.accessed = old_time;
+                tfs_errno = TFS_ERR_WRITE;
                 return TFS_FAILURE;
             }
 
@@ -325,13 +365,19 @@ fileDescriptor tfs_openFile(char *name)
         return TFS_FAILURE;
     }
 
-    // write inode block to disk
+    // create inode block
     inodeblock_t inodeblock;
     memset(&inodeblock, 0x00, BLOCKSIZE);
     inodeblock.type = 2;
     inodeblock.magic_number = md.superblock.magic_number;
     inodeblock.size = 0;
+    time(&curtime);
+    inodeblock.created = curtime;
+    inodeblock.modified = curtime;
+    inodeblock.accessed = curtime;
     strncpy(inodeblock.filename, name, _TFS_MAX_FILENAME_LENGTH + 1);
+
+    // write inode block to disk
     if (writeBlock(md.disk_descriptor, inode_table_entry + 1, &inodeblock) == -1)
     {
         tfs_errno = TFS_ERR_WRITE;
@@ -391,7 +437,8 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size)
     }
 
     // check for read only file
-    if (inode_table[file_table[FD].inode_table_entry].inode.read_only)
+    inodeblock_t *inode_table_block = &inode_table[file_table[FD].inode_table_entry].inode;
+    if (inode_table_block->read_only)
     {
         tfs_errno = TFS_ERR_READ_ONLY;
         return TFS_FAILURE;
@@ -461,12 +508,21 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size)
     }
 
     // update inode table
-    inode_table[file_table[FD].inode_table_entry].inode.size = size;
-    inode_table[file_table[FD].inode_table_entry].inode.first_block = md.superblock.free_block;
+    inode_table_block->size = size;
+    inode_table_block->first_block = md.superblock.free_block;
+    time_t curtime;
+    time_t old_modified = inode_table_block->modified;
+    time_t old_access = inode_table_block->accessed;
+    time(&curtime);
+    inode_table_block->modified = curtime;
+    inode_table_block->accessed = curtime;
 
     // write inode block to disk
-    if (writeBlock(md.disk_descriptor, file_table[FD].inode_table_entry + 1, &inode_table[file_table[FD].inode_table_entry].inode) == -1)
+    if (writeBlock(md.disk_descriptor, file_table[FD].inode_table_entry + 1, inode_table_block) == -1)
     {
+        // revert time accessed and modified
+        inode_table_block->modified = old_modified;
+        inode_table_block->accessed = old_access;
         tfs_errno = TFS_ERR_WRITE;
         return TFS_FAILURE;
     }
@@ -503,7 +559,8 @@ int tfs_deleteFile(fileDescriptor FD)
     }
 
     // check for read only file
-    if (inode_table[file_table[FD].inode_table_entry].inode.read_only)
+    inodeblock_t *inode_table_block = &inode_table[file_table[FD].inode_table_entry].inode;
+    if (inode_table_block->read_only)
     {
         tfs_errno = TFS_ERR_READ_ONLY;
         return TFS_FAILURE;
@@ -528,9 +585,9 @@ int tfs_deleteFile(fileDescriptor FD)
     memset(&freeblock, 0x00, BLOCKSIZE);
     freeblock.type = 4;
     freeblock.magic_number = md.superblock.magic_number;
-    int block_number = inode_table[file_table[FD].inode_table_entry].inode.first_block;
-    int total_blocks = inode_table[file_table[FD].inode_table_entry].inode.size / _TFS_EFFECTIVE_DATA_SIZE;
-    if (inode_table[file_table[FD].inode_table_entry].inode.size % _TFS_EFFECTIVE_DATA_SIZE != 0)
+    int block_number = inode_table_block->first_block;
+    int total_blocks = inode_table_block->size / _TFS_EFFECTIVE_DATA_SIZE;
+    if (inode_table_block->size % _TFS_EFFECTIVE_DATA_SIZE != 0)
     {
         total_blocks++;
     }
@@ -549,7 +606,7 @@ int tfs_deleteFile(fileDescriptor FD)
             // set free block to superblock free block
             freeblock.next_block = md.superblock.free_block;
             // set superblock free block to first block
-            md.superblock.free_block = inode_table[file_table[FD].inode_table_entry].inode.first_block;
+            md.superblock.free_block = inode_table_block->first_block;
 
             // write free block to disk
             if (writeBlock(md.disk_descriptor, block_number, &freeblock) == -1)
@@ -628,6 +685,21 @@ int tfs_readByte(fileDescriptor FD, char *buffer)
         block_number = datablock.next_block;
     }
 
+    // update inode table
+    time_t curtime;
+    time_t old_time = inodeblock->accessed;
+    time(&curtime);
+    inodeblock->accessed = curtime;
+
+    // write inode block to disk
+    if (writeBlock(md.disk_descriptor, file_table[FD].inode_table_entry + 1, inodeblock) == -1)
+    {
+        // revert time accessed
+        inodeblock->accessed = old_time;
+        tfs_errno = TFS_ERR_WRITE;
+        return TFS_FAILURE;
+    }
+
     // read byte from data block and update file descriptor
     *buffer = datablock.data[data_offset];
     file_table[FD].file_descriptor++;
@@ -645,10 +717,8 @@ int tfs_seek(fileDescriptor FD, int offset)
         return TFS_FAILURE;
     }
 
-    // get inode block
-    inodeblock_t *inodeblock = &inode_table[file_table[FD].inode_table_entry].inode;
-
     // validate offset
+    inodeblock_t *inodeblock = &inode_table[file_table[FD].inode_table_entry].inode;
     if (offset < 0 || offset > inodeblock->size)
     {
         tfs_errno = TFS_ERR_INVALID_ARGUMENT;
@@ -680,19 +750,21 @@ int tfs_makeRO(char *name)
 
     // check for file in file table
     int current_mode;
+    inodeblock_t *inode_table_block;
     for (int i = 0; i < _TFS_MAX_INODES; i++)
     {
+        inode_table_block = &inode_table[file_table[i].inode_table_entry].inode;
         if (file_table[i].active && strcmp(file_table[i].filename, name) == 0)
         {
             // set read only flag
-            current_mode = inode_table[file_table[i].inode_table_entry].inode.read_only;
-            inode_table[file_table[i].inode_table_entry].inode.read_only = 1;
+            current_mode = inode_table_block->read_only;
+            inode_table_block->read_only = 1;
 
             // write inode block to disk
-            if (writeBlock(md.disk_descriptor, file_table[i].inode_table_entry + 1, &inode_table[file_table[i].inode_table_entry].inode) == -1)
+            if (writeBlock(md.disk_descriptor, file_table[i].inode_table_entry + 1, inode_table_block) == -1)
             {
                 // revert inode table
-                inode_table[file_table[i].inode_table_entry].inode.read_only = current_mode;
+                inode_table_block->read_only = current_mode;
                 tfs_errno = TFS_ERR_WRITE;
                 return TFS_FAILURE;
             }
@@ -707,16 +779,17 @@ int tfs_makeRO(char *name)
     // check for file in inode table
     for (int i = 0; i < _TFS_MAX_INODES; i++)
     {
-        if (inode_table[i].active && strcmp(inode_table[i].inode.filename, name) == 0)
+        inode_table_block = &inode_table[i].inode;
+        if (inode_table[i].active && strcmp(inode_table_block->filename, name) == 0)
         {
             // set read only flag
-            current_mode = inode_table[i].inode.read_only;
-            inode_table[i].inode.read_only = 1;
+            current_mode = inode_table_block->read_only;
+            inode_table_block->read_only = 1;
 
             // write inode block to disk
-            if (writeBlock(md.disk_descriptor, i + 1, &inode_table[i].inode) == -1)
+            if (writeBlock(md.disk_descriptor, i + 1, inode_table_block) == -1)
             {
-                inode_table[i].inode.read_only = current_mode;
+                inode_table_block->read_only = current_mode;
                 tfs_errno = TFS_ERR_WRITE;
                 return TFS_FAILURE;
             }
@@ -748,19 +821,21 @@ int tfs_makeRW(char *name)
 
     // check for file in file table
     int current_mode;
+    inodeblock_t *inode_table_block;
     for (int i = 0; i < _TFS_MAX_INODES; i++)
     {
+        inode_table_block = &inode_table[file_table[i].inode_table_entry].inode;
         if (file_table[i].active && strcmp(file_table[i].filename, name) == 0)
         {
             // unset read only flag
-            current_mode = inode_table[file_table[i].inode_table_entry].inode.read_only;
-            inode_table[file_table[i].inode_table_entry].inode.read_only = 0;
+            current_mode = inode_table_block->read_only;
+            inode_table_block->read_only = 0;
 
             // write inode block to disk
-            if (writeBlock(md.disk_descriptor, file_table[i].inode_table_entry + 1, &inode_table[file_table[i].inode_table_entry].inode) == -1)
+            if (writeBlock(md.disk_descriptor, file_table[i].inode_table_entry + 1, inode_table_block) == -1)
             {
                 // revert inode table
-                inode_table[file_table[i].inode_table_entry].inode.read_only = current_mode;
+                inode_table_block->read_only = current_mode;
                 tfs_errno = TFS_ERR_WRITE;
                 return TFS_FAILURE;
             }
@@ -773,17 +848,18 @@ int tfs_makeRW(char *name)
     // check for file in inode table
     for (int i = 0; i < _TFS_MAX_INODES; i++)
     {
-        if (inode_table[i].active && strcmp(inode_table[i].inode.filename, name) == 0)
+        inode_table_block = &inode_table[i].inode;
+        if (inode_table[i].active && strcmp(inode_table_block->filename, name) == 0)
         {
             // unset read only flag
-            current_mode = inode_table[i].inode.read_only;
-            inode_table[i].inode.read_only = 0;
+            current_mode = inode_table_block->read_only;
+            inode_table_block->read_only = 0;
 
             // write inode block to disk
-            if (writeBlock(md.disk_descriptor, i + 1, &inode_table[i].inode) == -1)
+            if (writeBlock(md.disk_descriptor, i + 1, inode_table_block) == -1)
             {
                 // revert inode table
-                inode_table[i].inode.read_only = current_mode;
+                inode_table_block->read_only = current_mode;
                 tfs_errno = TFS_ERR_WRITE;
                 return TFS_FAILURE;
             }
@@ -796,58 +872,6 @@ int tfs_makeRW(char *name)
     tfs_errno = TFS_ERR_INVALID_ARGUMENT;
     return TFS_FAILURE;
 }
-
-// int tfs_writeByte(fileDescriptor FD, int offset, unsigned int data)
-// {
-//     // check if disk is mounted
-//     if (!md.mounted)
-//     {
-//         tfs_errno = TFS_ERR_NO_DISK;
-//         return TFS_FAILURE;
-//     }
-
-//     // validate file descriptor
-//     if (!file_table[FD].active)
-//     {
-//         tfs_errno = TFS_ERR_FILE_DESCRIPTOR;
-//         return TFS_FAILURE;
-//     }
-
-//     // check for end of file
-//     inodeblock_t *inodeblock = &inode_table[file_table[FD].inode_table_entry].inode;
-//     if (file_table[FD].file_descriptor == inodeblock->size)
-//     {
-//         tfs_errno = TFS_ERR_END_OF_FILE;
-//         return TFS_FAILURE;
-//     }
-
-//     // find data block
-//     datablock_t datablock;
-//     int block_number = inodeblock->first_block;
-//     int block_offset = offset / _TFS_EFFECTIVE_DATA_SIZE;
-//     int data_offset = offset % _TFS_EFFECTIVE_DATA_SIZE;
-//     for (int i = 0; i < block_offset + 1; i++)
-//     {
-//         // get data block
-//         if (readBlock(md.disk_descriptor, block_number, &datablock) == -1)
-//         {
-//             tfs_errno = TFS_ERR_READ;
-//             return TFS_FAILURE;
-//         }
-//         block_number = datablock.next_block;
-//     }
-
-//     // write data block to disk
-//     datablock.data[data_offset] = data;
-//     if (writeBlock(md.disk_descriptor, block_number, &datablock) == -1)
-//     {
-//         tfs_errno = TFS_ERR_WRITE;
-//         return TFS_FAILURE;
-//     }
-
-//     tfs_errno = TFS_SUCCESS;
-//     return TFS_SUCCESS;
-// }
 
 int tfs_writeByte(fileDescriptor FD, unsigned int data)
 {
@@ -906,6 +930,56 @@ int tfs_writeByte(fileDescriptor FD, unsigned int data)
         tfs_errno = TFS_ERR_WRITE;
         return TFS_FAILURE;
     }
+
+    // update inode table
+    time_t curtime;
+    time_t old_modified = inodeblock->modified;
+    time_t old_access = inodeblock->accessed;
+    time(&curtime);
+    inodeblock->modified = curtime;
+    inodeblock->accessed = curtime;
+
+    // write inode block to disk
+    if (writeBlock(md.disk_descriptor, file_table[FD].inode_table_entry + 1, inodeblock) == -1)
+    {
+        // revert time accessed and modified
+        inodeblock->modified = old_modified;
+        inodeblock->accessed = old_access;
+        tfs_errno = TFS_ERR_WRITE;
+        return TFS_FAILURE;
+    }
+
+    tfs_errno = TFS_SUCCESS;
+    return TFS_SUCCESS;
+}
+
+int tfs_readFileInfo(fileDescriptor FD, file_info *info)
+{
+    // check if disk is mounted
+    if (!md.mounted)
+    {
+        tfs_errno = TFS_ERR_NO_DISK;
+        return TFS_FAILURE;
+    }
+
+    // validate file descriptor
+    if (!file_table[FD].active)
+    {
+        tfs_errno = TFS_ERR_FILE_DESCRIPTOR;
+        return TFS_FAILURE;
+    }
+
+    // get inode block
+    inodeblock_t *inodeblock = &inode_table[file_table[FD].inode_table_entry].inode;
+
+    // Format the time into a string
+    struct tm *time_info;
+    time_info = localtime(&inodeblock->created);
+    strftime(info->created, sizeof(char) * 22, "[%m-%d-%Y %H:%M:%S]", time_info);
+    time_info = localtime(&inodeblock->modified);
+    strftime(info->modified, sizeof(char) * 22, "[%m-%d-%Y %H:%M:%S]", time_info);
+    time_info = localtime(&inodeblock->accessed);
+    strftime(info->accessed, sizeof(char) * 22, "[%m-%d-%Y %H:%M:%S]", time_info);
 
     tfs_errno = TFS_SUCCESS;
     return TFS_SUCCESS;
