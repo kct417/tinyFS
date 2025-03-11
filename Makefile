@@ -38,9 +38,11 @@ tinyFSDemo: $(ODIR)/tinyFSDemo.o $(LDIR)/libTinyFS.a
 
 # Libraries
 $(LDIR)/libTinyFS.a: $(ODIR)/disk.o $(ODIR)/tinyFS.o
+	@mkdir -p $(LDIR)
 	ar r $@ $^
 
 $(LDIR)/libDisk.a: $(ODIR)/disk.o
+	@mkdir -p $(LDIR)
 	ar r $@ $^
 
 # Test Programs
@@ -52,24 +54,29 @@ tfsTest: $(ODIR)/tfsTest.o $(LDIR)/libTinyFS.a
 
 # Program Object Files
 $(ODIR)/tinyFSDemo.o: $(SDIR)/tinyFSDemo.c
+	@mkdir -p $(ODIR)
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 $(ODIR)/tinyFS.o: $(SDIR)/tinyFS.c $(ODIR)/disk.o
+	@mkdir -p $(ODIR)
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 $(ODIR)/disk.o: $(SDIR)/disk.c
+	@mkdir -p $(ODIR)
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 # Test Program Object Files
 $(ODIR)/diskTest.o: $(TDIR)/diskTest.c
+	@mkdir -p $(ODIR)
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 $(ODIR)/tfsTest.o: $(TDIR)/tfsTest.c
+	@mkdir -p $(ODIR)
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 # Clean
 clean:
-	rm -f $(OBJS)
+	rm -rf $(ODIR)
 
 clean-fs:
 	rm -f *.dsk
@@ -77,8 +84,8 @@ clean-fs:
 clean-all:
 	rm -f $(PROG)
 	rm -f $(TESTS)
-	rm -f $(LIBS)
-	rm -f $(OBJS)
+	rm -rf $(LDIR)
+	rm -rf $(ODIR)
 	rm -f *.dsk
 
 # Rebuild
