@@ -14,7 +14,7 @@ CC = gcc
 CFLAGS = -Wall -std=c99 -g -I$(IDIR)
 
 # Programs
-PROG = tinyFSDemo tinyFSDemo1
+PROG = tinyFSDemo
 
 # Libraries
 LIBS = $(LDIR)/libTinyFS.a $(LDIR)/libDisk.a
@@ -23,7 +23,7 @@ LIBS = $(LDIR)/libTinyFS.a $(LDIR)/libDisk.a
 TESTS = diskTest tfsTest
 
 # Object Files
-OBJS = $(ODIR)/tinyFSDemo.o $(ODIR)/tinyFS.o $(ODIR)/disk.o $(ODIR)/diskTest.o $(ODIR)/tfsTest.o $(ODIR)/tinyFSDemo1.o
+OBJS = $(ODIR)/tinyFSDemo.o $(ODIR)/tinyFS.o $(ODIR)/disk.o $(ODIR)/diskTest.o $(ODIR)/tfsTest.o
 
 # Default
 all: $(PROG)
@@ -34,9 +34,6 @@ tests: $(TESTS)
 
 # Program
 tinyFSDemo: $(ODIR)/tinyFSDemo.o $(LDIR)/libTinyFS.a
-	$(CC) $(CFLAGS) -o $@ $< -L$(LDIR) -lTinyFS
-
-tinyFSDemo1: $(ODIR)/tinyFSDemo1.o $(LDIR)/libTinyFS.a
 	$(CC) $(CFLAGS) -o $@ $< -L$(LDIR) -lTinyFS
 
 # Libraries
@@ -57,10 +54,6 @@ tfsTest: $(ODIR)/tfsTest.o $(LDIR)/libTinyFS.a
 
 # Program Object Files
 $(ODIR)/tinyFSDemo.o: $(SDIR)/tinyFSDemo.c
-	@mkdir -p $(ODIR)
-	$(CC) $(CFLAGS) -c -o $@ $^
-	
-$(ODIR)/tinyFSDemo1.o: $(SDIR)/tinyFSDemo1.c
 	@mkdir -p $(ODIR)
 	$(CC) $(CFLAGS) -c -o $@ $^
 
