@@ -1106,7 +1106,6 @@ int tfs_defrag()
     }
 
     // Move used blocks to the beginning of blocks organizer
-    // int next_free_block = used_block_count; // free blocks start at the end of used blocks
     for (int i = 0; i < used_block_count; i++)
     {
         if (used_blocks[i] != i)
@@ -1213,3 +1212,158 @@ int tfs_defrag()
     tfs_errno = TFS_SUCCESS;
     return TFS_SUCCESS;
 }
+
+int tfs_defrag() {
+    // Check if disk is mounted
+    if (!md.mounted) {
+        tfs_errno = TFS_ERR_NO_DISK;
+        return TFS_FAILURE;
+    }
+
+    int numBlocks = md.size / BLOCKSIZE;
+    block_t *blocks = malloc(numBlocks * sizeof(block_t));
+    if (!blocks) {
+        tfs_errno = TFS_ERR_NO_MEMORY;
+        return TFS_FAILURE;
+    }
+
+    // Read all blocks into memory
+    for (int i = 0; i < numBlocks; i++) {
+        if (readBlock(md.disk_descriptor, i, &blocks[i]) == -1) {
+            free(blocks);
+            tfs_errno = TFS_ERR_READ;
+            return TFS_FAILURE;
+        }
+    }
+
+    // Identify used and free blocks
+    int used_block_count = 0;
+    int free_block_count = 0;
+    int *used_blocks = malloc(numBlocks * sizeof(int));
+    int *free_blocks = malloc(numBlocks * sizeof(int));
+    int *block_map = malloc(numBlocks * sizeof(int)); // Map old block numbers to new ones
+
+    if (!used_blocks || !free_blocks || !block_map) {
+        free(blocks);
+        free(used_blocks);
+        free(free_blocks);
+        free(block_map);
+        tfs_errno = TFS_ERR_NO_MEMORY;
+        return TFS_FAILURE;
+    }
+
+    for (int i = 0; i < numBlocks; i++) {
+        if (blocks[i].type == 0 || blocks[i].type == 4) {
+            free_blocks[free_block_count++] = i;
+        } else {
+            used_blocks[used_block_count++] = i;
+        }
+    }
+
+    // Move used blocks to the beginning & update block_map
+    for (int i = 0; i < used_block_count; i++) {
+        int old_block = used_blocks[i];
+        if (old_block != i) {
+            blocks[i] = blocks[old_block];  // Move block data
+        }
+        block_map[old_block] = i;  // Map old block number to new one
+    }
+
+    // Mark old block locations as free
+    for (int i = used_block_count; i < numBlocks; i++) {
+        blocks[i].type = 0;  // Mark as free block
+        block_map[i] = -1;   // No longer mapped to a valid block
+    }
+
+    // Update the inode table with new block mappings
+    for (int i = 0; i < _TFS_MAX_INODES; i++) {
+        if (inode_table[i].active) {
+            inodeblock_t *inode = &inode_table[i].inode;
+            int block_number = inode->first_block;
+            int new_block_number = -1;
+            int prev_block_number = -1;
+
+            while (block_number != 0) {
+                new_block_number = block_map[block_number];
+
+                if (new_block_number == -1) {
+                    tfs_errno = TFS_ERR_CORRUPTED_DISK;
+                    return TFS_FAILURE; // If something wasn't mapped, error out
+                }
+
+                if (prev_block_number == -1) {
+                    inode->first_block = new_block_number;
+                } else {
+                    blocks[prev_block_number].next_block = new_block_number;
+                }
+
+                prev_block_number = new_block_number;
+                block_number = blocks[block_number].next_block;
+            }
+
+            if (prev_block_number != -1) {
+                blocks[prev_block_number].next_block = 0;
+            }
+        }
+    }
+
+    // Update the file table with new block mappings
+    for (int i = 0; i < _TFS_MAX_INODES; i++) {
+        if (file_table[i].active) {
+            int inode_index = file_table[i].inode_table_entry;
+            inodeblock_t *inode = &inode_table[inode_index].inode;
+            int block_number = inode->first_block;
+            int offset = 0;
+
+            while (block_number != 0) {
+                if (offset <= file_table[i].file_descriptor && file_table[i].file_descriptor < offset + _TFS_EFFECTIVE_DATA_SIZE) {
+                    file_table[i].file_descriptor = block_map[block_number] * _TFS_EFFECTIVE_DATA_SIZE + (file_table[i].file_descriptor - offset);
+                    break;
+                }
+
+                offset += _TFS_EFFECTIVE_DATA_SIZE;
+                block_number = blocks[block_number].next_block;
+            }
+        }
+    }
+
+    // Write the modified blocks back to the disk
+    for (int i = 0; i < numBlocks; i++) {
+        if (writeBlock(md.disk_descriptor, i, &blocks[i]) == -1) {
+            free(blocks);
+            free(used_blocks);
+            free(free_blocks);
+            free(block_map);
+            tfs_errno = TFS_ERR_WRITE;
+            return TFS_FAILURE;
+        }
+    }
+
+    // Update the free block list
+    int first_free_block = used_block_count;
+    for (int i = first_free_block; i < numBlocks - 1; i++) {
+        blocks[i].next_block = i + 1;  // Link free blocks together
+    }
+    blocks[numBlocks - 1].next_block = 0;  // Last free block terminates list
+
+    // Update the superblock
+    md.superblock.free_block = first_free_block;
+    if (writeBlock(md.disk_descriptor, 0, &md.superblock) == -1) {
+        free(blocks);
+        free(used_blocks);
+        free(free_blocks);
+        free(block_map);
+        tfs_errno = TFS_ERR_WRITE;
+        return TFS_FAILURE;
+    }
+
+    // Free allocated memory
+    free(blocks);
+    free(used_blocks);
+    free(free_blocks);
+    free(block_map);
+
+    tfs_errno = TFS_SUCCESS;
+    return TFS_SUCCESS;
+}
+
