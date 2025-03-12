@@ -543,6 +543,51 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size)
         return TFS_FAILURE;
     }
 
+    // reset data blocks if file is not empty
+    datablock_t datablock;
+    freeblock_t freeblock;
+    memset(&freeblock, 0x00, BLOCKSIZE);
+    freeblock.type = 4;
+    freeblock.magic_number = md.superblock.magic_number;
+    int block_number;
+    if (inode_table_block->size != 0)
+    {
+        // get data block
+        block_number = inode_table_block->first_block;
+        while (block_number != 0)
+        {
+            // get data block
+            if (readBlock(md.disk_descriptor, block_number, &datablock) == DSK_FAILURE)
+            {
+                tfs_errno = TFS_ERR_READ;
+                return TFS_FAILURE;
+            }
+
+            freeblock.next_block = datablock.next_block;
+
+            // write free block to disk
+            if (writeBlock(md.disk_descriptor, block_number, &freeblock) == DSK_FAILURE)
+            {
+                tfs_errno = TFS_ERR_WRITE;
+                return TFS_FAILURE;
+            }
+
+            block_number = datablock.next_block;
+        }
+
+        // set free block to superblock free block
+        freeblock.next_block = md.superblock.free_block;
+        // set superblock free block to first block
+        md.superblock.free_block = inode_table_block->first_block;
+
+        // write free block to disk
+        if (writeBlock(md.disk_descriptor, block_number, &freeblock) == DSK_FAILURE)
+        {
+            tfs_errno = TFS_ERR_WRITE;
+            return TFS_FAILURE;
+        }
+    }
+
     // calculate blocks needed
     int blocks_needed = size / _TFS_EFFECTIVE_DATA_SIZE;
     if (size % _TFS_EFFECTIVE_DATA_SIZE != 0)
@@ -551,15 +596,13 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size)
     }
 
     // write file to disk
-    block_t block;
-    datablock_t datablock;
     memset(&datablock, 0x00, BLOCKSIZE);
     datablock.type = 3;
     datablock.magic_number = md.superblock.magic_number;
     int blocks_written = 0;
     int offset = 0;
     int bytes_to_write = _TFS_EFFECTIVE_DATA_SIZE;
-    int block_number = md.superblock.free_block;
+    block_number = md.superblock.free_block;
     while (blocks_written < blocks_needed)
     {
         // check for free blocks
@@ -570,7 +613,7 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size)
         }
 
         // get free block from disk for next block
-        if (readBlock(md.disk_descriptor, block_number, &block) == DSK_FAILURE)
+        if (readBlock(md.disk_descriptor, block_number, &freeblock) == DSK_FAILURE)
         {
             tfs_errno = TFS_ERR_READ;
             return TFS_FAILURE;
@@ -592,7 +635,7 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size)
         }
         else
         {
-            datablock.next_block = block.next_block;
+            datablock.next_block = freeblock.next_block;
         }
 
         // write data block to disk
@@ -603,7 +646,7 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size)
         }
 
         // set next block
-        block_number = block.next_block;
+        block_number = freeblock.next_block;
     }
 
     // update inode table
@@ -833,12 +876,177 @@ int tfs_seek(fileDescriptor FD, int offset)
 
 int tfs_displayFragments()
 {
+    // check if disk is mounted
+    if (!md.mounted)
+    {
+        tfs_errno = TFS_ERR_NO_DISK;
+        return TFS_FAILURE;
+    }
+
+    printf("-----------------\n");
+    printf("Fragmentation Bitmap:\n");
+    block_t block;
+    for (int i = 0; i < md.size / BLOCKSIZE; i++)
+    {
+        if (readBlock(md.disk_descriptor, i, &block) == DSK_FAILURE)
+        {
+            tfs_errno = TFS_ERR_READ;
+            return TFS_FAILURE;
+        }
+
+        if (block.type != 4)
+        {
+            printf("1 ");
+        }
+        else
+        {
+            printf("0 ");
+        }
+    }
+    printf("\n-----------------\n");
+
     tfs_errno = TFS_SUCCESS;
     return TFS_SUCCESS;
 }
 
 int tfs_defrag()
 {
+    // check if disk is mounted
+    if (!md.mounted)
+    {
+        tfs_errno = TFS_ERR_NO_DISK;
+        return TFS_FAILURE;
+    }
+
+    block_t block;
+    int total_used_blocks = 0;
+    int total_blocks = md.size / BLOCKSIZE;
+    unsigned char bitmap[total_blocks];
+    memset(bitmap, 0x00, total_blocks);
+    int block_number = md.superblock.free_block;
+    for (int i = 0; i < total_blocks; i++)
+    {
+        // get block
+        if (readBlock(md.disk_descriptor, i, &block) == DSK_FAILURE)
+        {
+            tfs_errno = TFS_ERR_READ;
+            return TFS_FAILURE;
+        }
+
+        // check for free block
+        if (block.type != 4)
+        {
+            bitmap[i] = 1;
+            total_used_blocks++;
+        }
+    }
+
+    inodeblock_t *inodeblock;
+    datablock_t previous_datablock;
+    datablock_t current_datablock;
+    int first_free_block = 0;
+    int previous_block_number = 0;
+    int free_block_number = 0;
+    for (int i = 0; i < _TFS_MAX_INODES; i++)
+    {
+        inodeblock = &inode_table[i].inode;
+        if (inode_table[i].active)
+        {
+            block_number = inodeblock->first_block;
+            while (block_number != 0)
+            {
+                // get data block
+                if (readBlock(md.disk_descriptor, block_number, &current_datablock) == DSK_FAILURE)
+                {
+                    tfs_errno = TFS_ERR_READ;
+                    return TFS_FAILURE;
+                }
+
+                // data block is fragmented
+                if (block_number >= total_used_blocks)
+                {
+                    // find first free block
+                    for (int j = free_block_number; j < total_blocks; j++)
+                    {
+                        if (bitmap[j] == 0)
+                        {
+                            free_block_number = j;
+                            first_free_block = j;
+                            break;
+                        }
+                    }
+
+                    // write data block to disk
+                    if (writeBlock(md.disk_descriptor, first_free_block, &current_datablock) == DSK_FAILURE)
+                    {
+                        tfs_errno = TFS_ERR_WRITE;
+                        return TFS_FAILURE;
+                    }
+
+                    if (previous_block_number != 0)
+                    {
+                        // write previous data block to disk
+                        previous_datablock.next_block = first_free_block;
+                        if (writeBlock(md.disk_descriptor, previous_block_number, &previous_datablock) == DSK_FAILURE)
+                        {
+                            tfs_errno = TFS_ERR_WRITE;
+                            return TFS_FAILURE;
+                        }
+                    }
+                    else if (inodeblock->first_block >= total_used_blocks)
+                    {
+                        // write inode block to disk
+                        inodeblock->first_block = first_free_block;
+                        if (writeBlock(md.disk_descriptor, i + 1, inodeblock) == DSK_FAILURE)
+                        {
+                            tfs_errno = TFS_ERR_WRITE;
+                            return TFS_FAILURE;
+                        }
+                    }
+
+                    // update bitmap
+                    bitmap[block_number] = 0;
+                    bitmap[first_free_block] = 1;
+
+                    previous_block_number = first_free_block;
+                }
+                else
+                {
+                    previous_block_number = block_number;
+                }
+
+                // update previous data block
+                memcpy(&previous_datablock, &current_datablock, sizeof(datablock_t));
+
+                block_number = current_datablock.next_block;
+            }
+            previous_block_number = 0;
+        }
+    }
+
+    // update free blocks
+    freeblock_t freeblock;
+    memset(&freeblock, 0x00, BLOCKSIZE);
+    freeblock.type = 4;
+    freeblock.magic_number = md.superblock.magic_number;
+    md.superblock.free_block = total_used_blocks;
+    for (int i = total_used_blocks; i < total_blocks; i++)
+    {
+        freeblock.next_block = (i + 1) % total_blocks;
+        if (writeBlock(md.disk_descriptor, i, &freeblock) == DSK_FAILURE)
+        {
+            tfs_errno = TFS_ERR_WRITE;
+            return TFS_FAILURE;
+        }
+    }
+
+    // write superblock to disk
+    if (writeBlock(md.disk_descriptor, 0, &md.superblock) == DSK_FAILURE)
+    {
+        tfs_errno = TFS_ERR_WRITE;
+        return TFS_FAILURE;
+    }
+
     tfs_errno = TFS_SUCCESS;
     return TFS_SUCCESS;
 }
@@ -1177,4 +1385,25 @@ int tfs_readFileInfo(fileDescriptor FD)
 
     tfs_errno = TFS_SUCCESS;
     return TFS_SUCCESS;
+}
+
+void printBlocks(fileDescriptor FD)
+{
+    inodeblock_t *inodeblock = &inode_table[file_table[FD].inode_table_entry].inode;
+    datablock_t datablock;
+    int block_number = inodeblock->first_block;
+    printf("Blocks: ");
+    while (block_number != 0)
+    {
+        // get data block
+        if (readBlock(md.disk_descriptor, block_number, &datablock) == DSK_FAILURE)
+        {
+            tfs_errno = TFS_ERR_READ;
+            return;
+        }
+
+        printf("%d->", block_number);
+        block_number = datablock.next_block;
+    }
+    printf("0\n");
 }
