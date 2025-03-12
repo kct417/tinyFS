@@ -14,6 +14,19 @@ Implementation:
     successfully handles file operations, maintaining filesystem integrity, and
     supporting efficient disk usage through defragmentation.
 
+    The library is implemented with a superblock and 8 inodes allocated upon
+    creation. The inodes are either active or inactive representing if the a file
+    is stored in the inode. It uses a linked list implementation for connecting
+    data blocks and free blocks. This allows for easy storage of files as data
+    blocks can be linked as needed. However, the tradeoff is that blocks are not
+    stored contiguously which makes reading and writing to the file slower. The
+    library stores all of the data in a single directory. Each inode has a
+    read-only bit that when set prevents writes to and deletions of the file.
+    Initially, when a file is created, no data blocks are allocated. Data blocks
+    are allocated when the file is written to and the file size is updated. when
+    the disk is created all free blocks are linked in a contiguous chain with the
+    superblock pointing to the first free block.
+
     - tfs_mkfs() - Create a filesystem 
     - tfs_mount() - Mount the filesystem 
     - tfs_unmount() - Unmount the filesystem 
@@ -45,9 +58,11 @@ Additional Functionality:
 
     D: Read-Only & Byte-Level Writing: we implemented tfs_makeRO() and tfs_makeRW(), 
     which toggle file permission between read-only and read-write. We also implemented
-    tfs_writeByte, which allows modification of a specific byte inside a file at an 
-    offset. This was tested by setting a file to read-only and attempting to write/delete it.
-    Then, converted the file back to read/write and verified successful writes.
+    tfs_writeByte, which allows modification of a specific byte inside a file at the
+    current fileDescriptor. The file descriptor was incremented by one. This was tested
+    by setting a file to read-only and attempting to write/delete it. Then, converted
+    the file back to read/write and verified successful writes. A byte was also written
+    to a file and read to confirm that the byte was written.
 
     - tfs_makeRO(char *name) - Makes a file read-only.
     - tfs_makeRW(char *name) - Reverts a file to read-write mode.
@@ -92,6 +107,6 @@ Additional Functionality:
             - Next free block
 
 Limitations:
-    The number of inode blocks is set to 8 inodes. This means that the disk size must be at least
+    The number of inode blocks is set to 8 inodes. This means that the disk size will be at least
     2304 bytes to account for the superblock and the 8 inodes. Disk sizes larger than this are
     supported by the library.
