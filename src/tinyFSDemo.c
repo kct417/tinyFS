@@ -159,6 +159,19 @@ int main()
     printf("[TEST %d] : Wrote to file1\n", test++);
     printFileInfo(fd1, "file1", test++);
 
+
+    for (int i = 0; i < 25; i++)
+    {
+        if (tfs_writeByte(fd1, 'f') == TFS_FAILURE)
+        {
+            fprintf(stderr, "Failed to write byte to file1\n");
+            return 1;
+        }
+    }
+    printf("[TEST %d] : Wrote bytes to file1\n", test++);
+    printFileInfo(fd1, "file1", test++);
+
+
     for (int i = 0; i < 1000; i++)
     {
         content[i] = 'b';
@@ -176,6 +189,12 @@ int main()
     sleepForSeconds(SLEEP_TIME);
 
     printf("[TEST %d] : Reading file1: ", test++);
+    
+    if (tfs_seek(fd1, 0) == TFS_FAILURE)
+    {
+        fprintf(stderr, "Failed to seek in file1\n");
+        return 1;
+    }
     while (tfs_readByte(fd1, &buffer) != TFS_FAILURE)
     {
         printf("%c", buffer);
